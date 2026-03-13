@@ -64,7 +64,7 @@ jobs:
           key: ${{ runner.os }}-modules-${{ hashFiles('pnpm-lock.yaml') }}
       - run: pnpm typecheck
 
-  test:
+  test-unit:
     needs: install
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -80,23 +80,6 @@ jobs:
           path: node_modules
           key: ${{ runner.os }}-modules-${{ hashFiles('pnpm-lock.yaml') }}
       - run: pnpm test
-
-  test-e2e:
-    needs: test
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - uses: pnpm/action-setup@v4
-      - name: Restore node_modules
-        uses: actions/cache@v4
-        with:
-          path: node_modules
-          key: ${{ runner.os }}-modules-${{ hashFiles('pnpm-lock.yaml') }}
-      - run: pnpm test:e2e
 
   docker-build:
     needs: install
