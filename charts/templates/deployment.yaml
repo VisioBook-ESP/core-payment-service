@@ -1,9 +1,9 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "content-ingestion-service.fullname" . }}
+  name: {{ include "core-payment-service.fullname" . }}
   labels:
-    {{- include "content-ingestion-service.labels" . | nindent 4 }}
+    {{- include "core-payment-service.labels" . | nindent 4 }}
   annotations:
     argocd.argoproj.io/sync-wave: {{ .Values.syncWave | default "0" | quote }}
 spec:
@@ -20,7 +20,7 @@ spec:
       maxSurge: {{ .Values.strategy.rollingUpdate.maxSurge | default 1 }}
   selector:
     matchLabels:
-      {{- include "content-ingestion-service.selectorLabels" . | nindent 6 }}
+      {{- include "core-payment-service.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -28,7 +28,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "content-ingestion-service.labels" . | nindent 8 }}
+        {{- include "core-payment-service.labels" . | nindent 8 }}
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -37,7 +37,7 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "content-ingestion-service.serviceAccountName" . }}
+      serviceAccountName: {{ include "core-payment-service.serviceAccountName" . }}
       {{- with .Values.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
