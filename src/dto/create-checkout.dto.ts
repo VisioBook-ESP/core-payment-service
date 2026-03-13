@@ -7,16 +7,26 @@ export class CreateCheckoutDto {
   @IsNotEmpty()
   planId!: string;
 
-  @ApiPropertyOptional({ description: 'Intervalle de facturation', enum: ['month', 'year'], default: 'month' })
+  @ApiPropertyOptional({
+    description: 'Intervalle de facturation',
+    enum: ['month', 'year'],
+    default: 'month',
+  })
   @IsOptional()
   @IsIn(['month', 'year'])
   interval?: 'month' | 'year';
 
-  @ApiProperty({ description: 'URL de redirection apres succes', example: 'https://app.visiobook.com/success' })
+  @ApiProperty({
+    description: 'URL de redirection apres succes',
+    example: 'https://app.visiobook.com/success',
+  })
   @IsUrl()
   successUrl!: string;
 
-  @ApiProperty({ description: 'URL de redirection apres annulation', example: 'https://app.visiobook.com/pricing' })
+  @ApiProperty({
+    description: 'URL de redirection apres annulation',
+    example: 'https://app.visiobook.com/pricing',
+  })
   @IsUrl()
   cancelUrl!: string;
 }

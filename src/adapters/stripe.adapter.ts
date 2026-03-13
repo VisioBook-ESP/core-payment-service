@@ -58,7 +58,10 @@ export class StripeAdapter {
     });
   }
 
-  async createPortalSession(customerId: string, returnUrl: string): Promise<Stripe.BillingPortal.Session> {
+  async createPortalSession(
+    customerId: string,
+    returnUrl: string,
+  ): Promise<Stripe.BillingPortal.Session> {
     return this.stripe.billingPortal.sessions.create({
       customer: customerId,
       return_url: returnUrl,

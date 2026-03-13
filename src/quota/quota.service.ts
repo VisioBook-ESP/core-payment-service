@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { DatabaseClient } from '../services/database.client';
 import { getPlanById } from '../config/plans.config';
 import { QuotaResponseDto, ConsumeQuotaResponseDto } from '../dto/quota-response.dto';
@@ -61,7 +56,10 @@ export class QuotaService {
     }
 
     if (type === 'generation') {
-      if (quota.generationsLimit !== -1 && quota.generationsUsed + amount > quota.generationsLimit) {
+      if (
+        quota.generationsLimit !== -1 &&
+        quota.generationsUsed + amount > quota.generationsLimit
+      ) {
         return {
           success: false,
           remaining: Math.max(0, quota.generationsLimit - quota.generationsUsed),
@@ -70,7 +68,9 @@ export class QuotaService {
       }
       await this.databaseClient.updateQuotaUsage(userId, 'generations_used', amount);
       const remaining =
-        quota.generationsLimit === -1 ? -1 : quota.generationsLimit - quota.generationsUsed - amount;
+        quota.generationsLimit === -1
+          ? -1
+          : quota.generationsLimit - quota.generationsUsed - amount;
       this.logger.log(`User ${userId} consumed ${amount} generation(s), ${remaining} remaining`);
       return { success: true, remaining };
     }

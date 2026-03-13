@@ -11,10 +11,7 @@ describe('QuotaService', () => {
     jest.clearAllMocks();
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        QuotaService,
-        { provide: DatabaseClient, useValue: mockDatabaseClient },
-      ],
+      providers: [QuotaService, { provide: DatabaseClient, useValue: mockDatabaseClient }],
     }).compile();
 
     service = module.get<QuotaService>(QuotaService);

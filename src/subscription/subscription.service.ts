@@ -140,7 +140,11 @@ export class SubscriptionService {
     }
 
     try {
-      await this.stripeAdapter.updateSubscription(subscription.stripeSubscriptionId, newPlan.stripePriceId, true);
+      await this.stripeAdapter.updateSubscription(
+        subscription.stripeSubscriptionId,
+        newPlan.stripePriceId,
+        true,
+      );
     } catch (err) {
       throw new StripeException(`Failed to update subscription: ${(err as Error).message}`);
     }
@@ -158,7 +162,9 @@ export class SubscriptionService {
       });
     }
 
-    this.logger.log(`Subscription upgraded for user ${userId}: ${subscription.planId} -> ${newPlanId}`);
+    this.logger.log(
+      `Subscription upgraded for user ${userId}: ${subscription.planId} -> ${newPlanId}`,
+    );
   }
 
   async downgradePlan(userId: string, newPlanId: string): Promise<void> {
@@ -179,7 +185,11 @@ export class SubscriptionService {
     }
 
     try {
-      await this.stripeAdapter.updateSubscription(subscription.stripeSubscriptionId, newPlan.stripePriceId, false);
+      await this.stripeAdapter.updateSubscription(
+        subscription.stripeSubscriptionId,
+        newPlan.stripePriceId,
+        false,
+      );
     } catch (err) {
       throw new StripeException(`Failed to update subscription: ${(err as Error).message}`);
     }
@@ -187,7 +197,9 @@ export class SubscriptionService {
     await this.databaseClient.updateSubscriptionPlan(subscription.id, newPlanId);
     await this.userServiceClient.updateUserTier(userId, newPlanId);
 
-    this.logger.log(`Subscription downgraded for user ${userId}: ${subscription.planId} -> ${newPlanId}`);
+    this.logger.log(
+      `Subscription downgraded for user ${userId}: ${subscription.planId} -> ${newPlanId}`,
+    );
   }
 
   async createPortalSession(userId: string, returnUrl?: string): Promise<{ portalUrl: string }> {

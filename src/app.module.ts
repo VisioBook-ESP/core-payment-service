@@ -23,9 +23,7 @@ import { WebhookModule } from './webhook/webhook.module';
         redact: ['req.headers.authorization'],
       },
     }),
-    ThrottlerModule.forRoot([
-      { name: 'default', ttl: 60000, limit: 100 },
-    ]),
+    ThrottlerModule.forRoot([{ name: 'default', ttl: 60000, limit: 100 }]),
     HealthModule,
     SubscriptionModule,
     QuotaModule,

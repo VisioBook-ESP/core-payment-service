@@ -5,10 +5,7 @@ import { SubscriptionService } from './subscription.service';
 import { CreateCheckoutDto } from '../dto/create-checkout.dto';
 import { ChangePlanDto } from '../dto/change-plan.dto';
 import { PlanResponseDto } from '../dto/plan-response.dto';
-import {
-  SubscriptionResponseDto,
-  CheckoutResponseDto,
-} from '../dto/subscription-response.dto';
+import { SubscriptionResponseDto, CheckoutResponseDto } from '../dto/subscription-response.dto';
 import { PortalSessionResponseDto } from '../dto/portal-session.dto';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { AuthenticatedRequest } from '../guards/authenticated-request';
@@ -30,7 +27,7 @@ export class SubscriptionController {
   @Get('current')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Abonnement actuel de l\'utilisateur' })
+  @ApiOperation({ summary: "Abonnement actuel de l'utilisateur" })
   @ApiResponse({ status: 200, type: SubscriptionResponseDto })
   async getCurrentSubscription(
     @Req() req: AuthenticatedRequest,
@@ -59,7 +56,7 @@ export class SubscriptionController {
   @Post('cancel')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Annuler l\'abonnement' })
+  @ApiOperation({ summary: "Annuler l'abonnement" })
   @ApiResponse({ status: 200 })
   async cancelSubscription(@Req() req: AuthenticatedRequest): Promise<{ message: string }> {
     await this.subscriptionService.cancelSubscription(req.user.userId);
@@ -95,7 +92,7 @@ export class SubscriptionController {
   @Get('portal')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Obtenir l\'URL du portail de facturation Stripe' })
+  @ApiOperation({ summary: "Obtenir l'URL du portail de facturation Stripe" })
   @ApiQuery({ name: 'returnUrl', required: false, description: 'URL de retour apres le portail' })
   @ApiResponse({ status: 200, type: PortalSessionResponseDto })
   async getPortalSession(

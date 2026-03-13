@@ -21,9 +21,7 @@ describe('SubscriptionController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [SubscriptionController],
-      providers: [
-        { provide: SubscriptionService, useValue: mockSubscriptionService },
-      ],
+      providers: [{ provide: SubscriptionService, useValue: mockSubscriptionService }],
     })
       .overrideGuard(ThrottlerGuard)
       .useValue({ canActivate: () => true })

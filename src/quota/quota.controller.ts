@@ -18,7 +18,7 @@ export class QuotaController {
   @Get()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Quotas de l\'utilisateur connecte' })
+  @ApiOperation({ summary: "Quotas de l'utilisateur connecte" })
   @ApiResponse({ status: 200, type: QuotaResponseDto })
   async getUserQuota(@Req() req: AuthenticatedRequest): Promise<QuotaResponseDto> {
     return this.quotaService.getUserQuota(req.user.userId);
@@ -36,7 +36,7 @@ export class QuotaController {
   @Post('reset')
   @UseGuards(ServiceKeyGuard)
   @ApiHeader({ name: 'x-api-key', description: 'Cle API interne (admin)' })
-  @ApiOperation({ summary: 'Reinitialiser les quotas d\'un utilisateur (admin)' })
+  @ApiOperation({ summary: "Reinitialiser les quotas d'un utilisateur (admin)" })
   @ApiResponse({ status: 200 })
   async resetQuota(@Body() dto: ResetQuotaDto): Promise<{ message: string }> {
     await this.quotaService.resetQuota(dto.userId);

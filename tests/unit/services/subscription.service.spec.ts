@@ -83,9 +83,9 @@ describe('SubscriptionService', () => {
     });
 
     it('should throw BadRequestException for free plan', async () => {
-      await expect(
-        service.createCheckoutSession('user-123', 'free', 'url', 'url'),
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.createCheckoutSession('user-123', 'free', 'url', 'url')).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('should throw BadRequestException when user has active subscription', async () => {

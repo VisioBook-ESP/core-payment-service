@@ -23,7 +23,13 @@ const userServiceProvider = {
 @Module({
   imports: [HttpModule],
   controllers: [SubscriptionController],
-  providers: [SubscriptionService, StripeAdapter, DatabaseClient, userServiceProvider, JwtAuthGuard],
+  providers: [
+    SubscriptionService,
+    StripeAdapter,
+    DatabaseClient,
+    userServiceProvider,
+    JwtAuthGuard,
+  ],
   exports: [SubscriptionService],
 })
 export class SubscriptionModule {}

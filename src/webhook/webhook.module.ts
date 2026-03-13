@@ -24,6 +24,12 @@ const userServiceProvider = {
 @Module({
   imports: [HttpModule, SubscriptionModule],
   controllers: [WebhookController],
-  providers: [WebhookService, StripeAdapter, DatabaseClient, NotificationClient, userServiceProvider],
+  providers: [
+    WebhookService,
+    StripeAdapter,
+    DatabaseClient,
+    NotificationClient,
+    userServiceProvider,
+  ],
 })
 export class WebhookModule {}
