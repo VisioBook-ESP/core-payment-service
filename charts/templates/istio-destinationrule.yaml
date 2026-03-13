@@ -1,0 +1,16 @@
+{{- if and .Values.istio.enabled .Values.istio.destinationRule.enabled }}
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: {{ include "core-payment-service.fullname" . }}
+  labels:
+    {{- include "core-payment-service.labels" . | nindent 4 }}
+spec:
+  host: {{ include "core-payment-service.fullname" . }}
+  trafficPolicy:
+    {{- toYaml .Values.istio.destinationRule.trafficPolicy | nindent 4 }}
+    {{- if .Values.istio.mtls.enabled }}
+    tls:
+      mode: {{ .Values.istio.mtls.mode }}
+    {{- end }}
+{{- end }}
