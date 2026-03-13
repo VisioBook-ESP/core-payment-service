@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
+import { InvalidPlanException, SubscriptionNotFoundException } from '../../../src/common/payment.exceptions';
 import { SubscriptionService } from '../../../src/subscription/subscription.service';
 import { StripeAdapter } from '../../../src/adapters/stripe.adapter';
 import { DatabaseClient } from '../../../src/services/database.client';
@@ -76,15 +77,15 @@ describe('SubscriptionService', () => {
       expect(mockStripeAdapter.createCheckoutSession).toHaveBeenCalled();
     });
 
-    it('should throw NotFoundException for invalid plan', async () => {
+    it('should throw InvalidPlanException for invalid plan', async () => {
       await expect(
         service.createCheckoutSession('user-123', 'invalid', 'url', 'url'),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrow(InvalidPlanException);
     });
 
-    it('should throw BadRequestException for free plan', async () => {
+    it('should throw InvalidPlanException for free plan', async () => {
       await expect(service.createCheckoutSession('user-123', 'free', 'url', 'url')).rejects.toThrow(
-        BadRequestException,
+        InvalidPlanException,
       );
     });
 
@@ -131,7 +132,7 @@ describe('SubscriptionService', () => {
     it('should throw when no active subscription', async () => {
       mockDatabaseClient.getSubscriptionByUserId.mockResolvedValueOnce(null);
 
-      await expect(service.cancelSubscription('user-no-sub')).rejects.toThrow(NotFoundException);
+      await expect(service.cancelSubscription('user-no-sub')).rejects.toThrow(SubscriptionNotFoundException);
     });
   });
 
