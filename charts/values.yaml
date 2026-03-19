@@ -2,7 +2,7 @@ replicaCount: 1
 
 image:
   repository: ghcr.io/visiobook-esp/core-payment-service-dev
-  tag: "sha-b1434a2"
+  tag: "sha-5deb880"
   pullPolicy: IfNotPresent
 
 service:
