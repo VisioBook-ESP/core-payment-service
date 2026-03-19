@@ -94,7 +94,7 @@ env:
   REDIS_HOST: redis.visiobook-namespace.svc.cluster.local
   REDIS_PORT: "6379"
 
-# Sensitive values — override via sealed secrets or external secret manager in production
+# Sensitive values — override via sealed secrets or external secret manager in production S
 secrets:
   STRIPE_SECRET_KEY: ""
   STRIPE_PUBLISHABLE_KEY: ""
