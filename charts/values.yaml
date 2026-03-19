@@ -80,21 +80,18 @@ minReadySeconds: 10 # le pod doit être stable 10s avant d'être considéré Ava
 terminationGracePeriodSeconds: 10 # délai avant SIGKILL (30s par défaut, réduit pour les tests)
 
 existingSecret: ""
-existingMinioSecret: "minio-storage-secret"
+existingMinioSecret: ""
 
 env:
-  # Application
-  # APP_NAME: "core-payment-service"
-  # APP_VERSION: "0.1.0"
-  # ENVIRONMENT: "production"
-  # DEBUG: "false"
-  # LOG_LEVEL: "INFO"
-
-  # # API Configuration
-  # API_HOST: "0.0.0.0"
-  # API_PORT: "8080"
-  # API_PREFIX: "/api/v1"
-
-  # # CORS
-  # CORS_ORIGINS: "https://visiobook.cloud"
-
+  APP_NAME: core-payment-service
+  APP_VERSION: 0.1.0
+  APP_PORT: "8087"
+  API_PREFIX: /api/v1
+  NODE_ENV: production
+  LOG_LEVEL: info
+  SWAGGER_ENABLED: "false"
+  DATABASE_SERVICE_URL: http://core-database-service.visiobook-namespace.svc.cluster.local:8095
+  USER_SERVICE_URL: http://core-user-service.visiobook-namespace.svc.cluster.local:8081
+  NOTIFICATION_SERVICE_URL: http://core-notification-service.visiobook-namespace.svc.cluster.local:8088
+  REDIS_HOST: redis.visiobook-namespace.svc.cluster.local
+  REDIS_PORT: "6379"
