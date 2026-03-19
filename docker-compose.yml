@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - '8087:8087'
+    environment:
+      - NODE_ENV=development
+      - PORT=8087
+      - API_PREFIX=/api/v1
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-sk_test_placeholder}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-whsec_placeholder}
+      - DATABASE_SERVICE_URL=http://host.docker.internal:8095
+      - USER_SERVICE_URL=http://host.docker.internal:8081
+      - NOTIFICATION_SERVICE_URL=http://host.docker.internal:8088
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY:-dev-internal-key}
+      - USER_SERVICE_MOCK=${USER_SERVICE_MOCK:-false}
+      - LOG_LEVEL=debug
+    volumes:
+      - ./src:/app/src
+      - ./tests:/app/tests
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    volumes:
+      - redis-data:/data
+
+volumes:
+  redis-data:
