@@ -80,7 +80,7 @@ minReadySeconds: 10 # le pod doit être stable 10s avant d'être considéré Ava
 terminationGracePeriodSeconds: 10 # délai avant SIGKILL (30s par défaut, réduit pour les tests)
 
 existingSecret: ""
-existingMinioSecret: "minio-storage-secret"
+existingMinioSecret: ""
 
 env:
   APP_NAME: core-payment-service
