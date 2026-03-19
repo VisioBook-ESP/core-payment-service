@@ -55,14 +55,9 @@ spec:
             - name: {{ $key }}
               value: {{ $val | quote }}
             {{- end }}
-            {{- if .Values.secrets }}
-            {{- range $key := (keys .Values.secrets) }}
+            {{- range $key, $val := .Values.secrets }}
             - name: {{ $key }}
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "core-payment-service.fullname" $ }}-secrets
-                  key: {{ $key }}
-            {{- end }}
+              value: {{ $val | quote }}
             {{- end }}
             {{- if .Values.existingSecret }}
             - name: DATABASE_URL
