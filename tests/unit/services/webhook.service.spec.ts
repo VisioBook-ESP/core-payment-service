@@ -162,6 +162,70 @@ describe('WebhookService', () => {
       expect(mockSubscriptionService.activateSubscription).not.toHaveBeenCalled();
     });
 
+    it('should handle customer.subscription.created (logs only)', async () => {
+      const event = {
+        id: 'evt_created',
+        type: 'customer.subscription.created',
+        data: {
+          object: {
+            id: 'sub_test_123',
+            status: 'active',
+            customer: 'cus_test_123',
+            metadata: { userId: 'user-123' },
+          },
+        },
+      } as unknown as Stripe.Event;
+
+      await expect(service.handleStripeEvent(event)).resolves.toBeUndefined();
+    });
+
+    it('should handle customer.subscription.updated with userId', async () => {
+      const event = {
+        id: 'evt_updated',
+        type: 'customer.subscription.updated',
+        data: {
+          object: {
+            id: 'sub_test_123',
+            status: 'active',
+            customer: 'cus_test_123',
+            current_period_start: Math.floor(Date.now() / 1000),
+            current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 3600,
+            metadata: { userId: 'user-123', planId: 'premium' },
+          },
+        },
+      } as unknown as Stripe.Event;
+
+      await service.handleStripeEvent(event);
+
+      expect(mockDatabaseClient.upsertSubscription).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'user-123',
+          stripeSubscriptionId: 'sub_test_123',
+          status: 'active',
+        }),
+      );
+    });
+
+    it('should handle customer.subscription.updated without userId (early return)', async () => {
+      const event = {
+        id: 'evt_updated_no_user',
+        type: 'customer.subscription.updated',
+        data: {
+          object: {
+            id: 'sub_test_123',
+            status: 'active',
+            customer: 'cus_test_123',
+            current_period_start: Math.floor(Date.now() / 1000),
+            current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 3600,
+            metadata: {},
+          },
+        },
+      } as unknown as Stripe.Event;
+
+      await expect(service.handleStripeEvent(event)).resolves.toBeUndefined();
+      expect(mockDatabaseClient.upsertSubscription).not.toHaveBeenCalled();
+    });
+
     it('should log warning for unhandled event types', async () => {
       const event = {
         id: 'evt_unknown',

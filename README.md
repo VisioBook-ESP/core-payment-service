@@ -557,20 +557,39 @@ npm run test:watch
 ```
 tests/
 ├── unit/
+│   ├── adapters/
+│   │   └── stripe.adapter.spec.ts      ✅ 10 tests (Stripe SDK mocké)
+│   ├── guards/
+│   │   └── jwt-auth.guard.spec.ts      ✅ 6 tests
 │   ├── services/
-│   │   ├── subscription.service.spec.ts
-│   │   ├── payment.service.spec.ts
-│   │   └── quota.service.spec.ts
+│   │   ├── subscription.service.spec.ts ✅
+│   │   ├── webhook.service.spec.ts      ✅
+│   │   └── quota.service.spec.ts        ✅
 │   └── controllers/
-│       ├── subscription.controller.spec.ts
-│       └── quota.controller.spec.ts
-├── integration/
+│       ├── subscription.controller.spec.ts ✅
+│       └── quota.controller.spec.ts        ✅
+├── integration/                         ⏳ à faire
 │   ├── subscription.e2e-spec.ts
-│   └── webhook.e2e-spec.ts
+│   ├── webhook.e2e-spec.ts
+│   └── quota.e2e-spec.ts
 └── mocks/
     ├── stripe.mock.ts
     ├── database.mock.ts
-    └── user-service.mock.ts
+    ├── user-service.mock.ts
+    └── notification.mock.ts
+```
+
+### Lancer un fichier de test spécifique
+
+```bash
+# Un seul fichier
+npm test -- --testPathPattern="stripe.adapter"
+
+# Plusieurs fichiers
+npm test -- --testPathPattern="stripe.adapter|jwt-auth"
+
+# Tous les tests unitaires avec couverture
+npm run test:cov
 ```
 
 ## Deploiement

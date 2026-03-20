@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
-import { InvalidPlanException, SubscriptionNotFoundException } from '../../../src/common/payment.exceptions';
+import { InvalidPlanException, SubscriptionNotFoundException, StripeException } from '../../../src/common/payment.exceptions';
 import { SubscriptionService } from '../../../src/subscription/subscription.service';
 import { StripeAdapter } from '../../../src/adapters/stripe.adapter';
 import { DatabaseClient } from '../../../src/services/database.client';
@@ -150,6 +150,108 @@ describe('SubscriptionService', () => {
       expect(mockDatabaseClient.upsertSubscription).toHaveBeenCalled();
       expect(mockUserServiceClient.updateUserTier).toHaveBeenCalledWith('user-123', 'premium');
       expect(mockDatabaseClient.upsertQuota).toHaveBeenCalled();
+    });
+  });
+
+  describe('upgradePlan', () => {
+    it('should upgrade from premium to enterprise', async () => {
+      await service.upgradePlan('user-123', 'enterprise');
+
+      expect(mockStripeAdapter.updateSubscription).toHaveBeenCalledWith(
+        'sub_test_123',
+        expect.any(String),
+        true,
+      );
+      expect(mockDatabaseClient.updateSubscriptionPlan).toHaveBeenCalledWith('sub-entity-123', 'enterprise');
+      expect(mockUserServiceClient.updateUserTier).toHaveBeenCalledWith('user-123', 'enterprise');
+      expect(mockDatabaseClient.upsertQuota).toHaveBeenCalled();
+    });
+
+    it('should throw InvalidPlanException for invalid plan', async () => {
+      await expect(service.upgradePlan('user-123', 'invalid')).rejects.toThrow(InvalidPlanException);
+    });
+
+    it('should throw InvalidPlanException for free plan (no stripePriceId)', async () => {
+      await expect(service.upgradePlan('user-123', 'free')).rejects.toThrow(InvalidPlanException);
+    });
+
+    it('should throw SubscriptionNotFoundException when no active subscription', async () => {
+      mockDatabaseClient.getSubscriptionByUserId.mockResolvedValueOnce(null);
+      await expect(service.upgradePlan('user-123', 'enterprise')).rejects.toThrow(SubscriptionNotFoundException);
+    });
+
+    it('should throw InvalidPlanException when target plan is not higher', async () => {
+      await expect(service.upgradePlan('user-123', 'premium')).rejects.toThrow(InvalidPlanException);
+    });
+
+    it('should throw StripeException when Stripe call fails', async () => {
+      mockStripeAdapter.updateSubscription.mockRejectedValueOnce(new Error('Stripe API error'));
+      await expect(service.upgradePlan('user-123', 'enterprise')).rejects.toThrow(StripeException);
+    });
+  });
+
+  describe('downgradePlan', () => {
+    it('should downgrade from enterprise to premium', async () => {
+      mockDatabaseClient.getSubscriptionByUserId.mockResolvedValueOnce({
+        ...mockSubscriptionEntity,
+        planId: 'enterprise',
+      });
+
+      await service.downgradePlan('user-123', 'premium');
+
+      expect(mockStripeAdapter.updateSubscription).toHaveBeenCalledWith(
+        'sub_test_123',
+        expect.any(String),
+        false,
+      );
+      expect(mockDatabaseClient.updateSubscriptionPlan).toHaveBeenCalledWith('sub-entity-123', 'premium');
+      expect(mockUserServiceClient.updateUserTier).toHaveBeenCalledWith('user-123', 'premium');
+    });
+
+    it('should throw InvalidPlanException for invalid plan', async () => {
+      await expect(service.downgradePlan('user-123', 'invalid')).rejects.toThrow(InvalidPlanException);
+    });
+
+    it('should throw SubscriptionNotFoundException when no active subscription', async () => {
+      mockDatabaseClient.getSubscriptionByUserId.mockResolvedValueOnce(null);
+      await expect(service.downgradePlan('user-123', 'premium')).rejects.toThrow(SubscriptionNotFoundException);
+    });
+
+    it('should throw InvalidPlanException when target plan is not lower', async () => {
+      await expect(service.downgradePlan('user-123', 'enterprise')).rejects.toThrow(InvalidPlanException);
+    });
+
+    it('should throw StripeException when Stripe call fails', async () => {
+      mockDatabaseClient.getSubscriptionByUserId.mockResolvedValueOnce({
+        ...mockSubscriptionEntity,
+        planId: 'enterprise',
+      });
+      mockStripeAdapter.updateSubscription.mockRejectedValueOnce(new Error('Stripe API error'));
+      await expect(service.downgradePlan('user-123', 'premium')).rejects.toThrow(StripeException);
+    });
+  });
+
+  describe('createPortalSession', () => {
+    it('should return portal URL', async () => {
+      const result = await service.createPortalSession('user-123');
+      expect(result).toHaveProperty('portalUrl');
+      expect(mockStripeAdapter.createPortalSession).toHaveBeenCalledWith(
+        'cus_test_123',
+        'https://app.visiobook.com/settings',
+      );
+    });
+
+    it('should use custom returnUrl when provided', async () => {
+      await service.createPortalSession('user-123', 'https://custom.url/return');
+      expect(mockStripeAdapter.createPortalSession).toHaveBeenCalledWith(
+        'cus_test_123',
+        'https://custom.url/return',
+      );
+    });
+
+    it('should throw SubscriptionNotFoundException when no customer found', async () => {
+      mockDatabaseClient.getSubscriptionByUserId.mockResolvedValueOnce(null);
+      await expect(service.createPortalSession('user-no-sub')).rejects.toThrow(SubscriptionNotFoundException);
     });
   });
 });

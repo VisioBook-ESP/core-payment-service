@@ -31,6 +31,7 @@ export const mockStripeAdapter = {
   createCheckoutSession: jest.fn().mockResolvedValue(mockCheckoutSession),
   getSubscription: jest.fn().mockResolvedValue(mockSubscription),
   cancelSubscription: jest.fn().mockResolvedValue({ ...mockSubscription, status: 'canceled' }),
+  updateSubscription: jest.fn().mockResolvedValue({ ...mockSubscription, status: 'active' }),
   createPortalSession: jest.fn().mockResolvedValue(mockPortalSession),
   verifyWebhookSignature: jest.fn().mockReturnValue({
     id: 'evt_test_123',

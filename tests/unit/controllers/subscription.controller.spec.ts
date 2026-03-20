@@ -16,6 +16,9 @@ describe('SubscriptionController', () => {
       checkoutUrl: 'https://checkout.stripe.com/test',
     }),
     cancelSubscription: jest.fn().mockResolvedValue(undefined),
+    upgradePlan: jest.fn().mockResolvedValue(undefined),
+    downgradePlan: jest.fn().mockResolvedValue(undefined),
+    createPortalSession: jest.fn().mockResolvedValue({ portalUrl: 'https://billing.stripe.com/test' }),
   };
 
   beforeEach(async () => {
@@ -69,6 +72,33 @@ describe('SubscriptionController', () => {
       const req = { user: { userId: 'user-123', email: 'test@test.com', tier: 'free' } } as any;
       const result = await controller.cancelSubscription(req);
       expect(result.message).toBe('Subscription canceled successfully');
+    });
+  });
+
+  describe('upgradePlan', () => {
+    it('should upgrade plan and return message', async () => {
+      const req = { user: { userId: 'user-123', email: 'test@test.com', tier: 'premium' } } as any;
+      const result = await controller.upgradePlan(req, { planId: 'enterprise' });
+      expect(result.message).toBe('Subscription upgraded to enterprise');
+      expect(mockSubscriptionService.upgradePlan).toHaveBeenCalledWith('user-123', 'enterprise');
+    });
+  });
+
+  describe('downgradePlan', () => {
+    it('should downgrade plan and return message', async () => {
+      const req = { user: { userId: 'user-123', email: 'test@test.com', tier: 'enterprise' } } as any;
+      const result = await controller.downgradePlan(req, { planId: 'premium' });
+      expect(result.message).toBe('Subscription downgraded to premium');
+      expect(mockSubscriptionService.downgradePlan).toHaveBeenCalledWith('user-123', 'premium');
+    });
+  });
+
+  describe('getPortalSession', () => {
+    it('should return portal URL', async () => {
+      const req = { user: { userId: 'user-123', email: 'test@test.com', tier: 'premium' } } as any;
+      const result = await controller.getPortalSession(req, 'https://app.visiobook.com/settings');
+      expect(result).toHaveProperty('portalUrl');
+      expect(mockSubscriptionService.createPortalSession).toHaveBeenCalledWith('user-123', 'https://app.visiobook.com/settings');
     });
   });
 });

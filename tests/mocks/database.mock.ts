@@ -32,8 +32,10 @@ export const mockDatabaseClient = {
   upsertSubscription: jest.fn().mockResolvedValue(mockSubscriptionEntity),
   updateSubscriptionStatus: jest.fn().mockResolvedValue(undefined),
   updateSubscriptionStatusByStripeId: jest.fn().mockResolvedValue(undefined),
+  updateSubscriptionPlan: jest.fn().mockResolvedValue(undefined),
   getQuotaByUserId: jest.fn().mockResolvedValue(mockQuotaEntity),
   upsertQuota: jest.fn().mockResolvedValue(mockQuotaEntity),
   updateQuotaUsage: jest.fn().mockResolvedValue(mockQuotaEntity),
+  resetQuotaUsage: jest.fn().mockResolvedValue(undefined),
   createTransaction: jest.fn().mockResolvedValue(undefined),
 };

@@ -237,21 +237,31 @@ Checklist exhaustive des taches a accomplir pour le microservice `core-payment-s
   - [x] Test getCurrentSubscription()
   - [x] Test createCheckoutSession()
   - [x] Test cancelSubscription()
+  - [x] Test activateSubscription()
+  - [x] Test upgradePlan()
+  - [x] Test downgradePlan()
+  - [x] Test createPortalSession()
 - [x] `QuotaService.spec.ts`
   - [x] Test getUserQuota()
   - [x] Test consumeQuota() - succes
   - [x] Test consumeQuota() - quota depasse
-  - [x] Test checkQuotaAvailable()
+  - [x] Test checkQuotaAvailable() - generation
+  - [x] Test checkQuotaAvailable() - storage
+  - [x] Test resetQuota()
 - [x] `WebhookService.spec.ts`
   - [x] Test tous les handlers d'events
-- [ ] `StripeAdapter.spec.ts`
-  - [ ] Mocks Stripe SDK
+  - [x] Test customer.subscription.created
+  - [x] Test customer.subscription.updated (avec/sans userId)
+- [x] `StripeAdapter.spec.ts`
+  - [x] Mocks Stripe SDK
 
 #### Tests controllers
 
 - [x] `SubscriptionController.spec.ts`
+  - [x] upgradePlan, downgradePlan, getPortalSession
 - [x] `QuotaController.spec.ts`
-- [ ] `WebhookController.spec.ts`
+  - [x] resetQuota
+- [x] `WebhookController.spec.ts`
 
 #### Tests integration
 
@@ -265,12 +275,28 @@ Checklist exhaustive des taches a accomplir pour le microservice `core-payment-s
 
 #### Tests Guards / Auth
 
-- [ ] `JwtAuthGuard.spec.ts`
-  - [ ] Test extraction Bearer token
-  - [ ] Test appel UserServiceClient.getUserFromToken()
-  - [ ] Test injection req.user avec userId/email
-  - [ ] Test 401 si token absent
-  - [ ] Test 401 si user-service retourne erreur
+- [x] `JwtAuthGuard.spec.ts`
+  - [x] Test extraction Bearer token
+  - [x] Test appel UserServiceClient.getUserFromToken()
+  - [x] Test injection req.user avec userId/email
+  - [x] Test 401 si token absent
+  - [x] Test 401 si user-service retourne erreur
+- [x] `ServiceKeyGuard.spec.ts`
+  - [x] Test cle valide → true
+  - [x] Test cle absente → 401
+  - [x] Test cle invalide → 401
+  - [x] Test whitelist ALLOWED_SERVICES — service autorise → true
+  - [x] Test whitelist ALLOWED_SERVICES — service non autorise → 403
+  - [x] Test whitelist sans x-service-name → 403
+
+#### Tests middleware
+
+- [x] `GlobalExceptionFilter.spec.ts`
+  - [x] HttpException objet → format standardise
+  - [x] HttpException string → format standardise
+  - [x] Error generique → 500
+  - [x] errorCode present → expose dans la reponse
+  - [x] timestamp ISO valide
 
 #### Mocks
 
@@ -284,8 +310,8 @@ Checklist exhaustive des taches a accomplir pour le microservice `core-payment-s
 
 #### Couverture
 
-- [ ] Atteindre couverture > 80%
-- [ ] Configuration Jest coverage
+- [x] Atteindre couverture > 80%
+- [x] Configuration Jest coverage (collectCoverageFrom excluant wrappers HTTP, modules, entities, DTOs)
 - [ ] Rapport coverage HTML
 
 ### Logging
@@ -430,9 +456,9 @@ Checklist exhaustive des taches a accomplir pour le microservice `core-payment-s
 |----------|-------|---------|-------------|
 | P0 | 88 | 88 | 100% |
 | P1 | 64 | 64 | 100% |
-| P2 | 77 | 45 | 58% |
+| P2 | 77 | 67 | 87% |
 | P3 | 55 | 0 | 0% |
-| **Total** | **284** | **197** | **69%** |
+| **Total** | **284** | **219** | **77%** |
 
 ### Jalons
 
@@ -465,4 +491,4 @@ Une tache est consideree comme terminee quand:
 
 ---
 
-*Derniere mise a jour: 2026-03-13 — v0.3.2 Price IDs Stripe mis a jour suite recréation des produits*
+*Derniere mise a jour: 2026-03-20 — v0.3.5 Couverture de tests > 80% atteinte (88 tests, 100% pass)*

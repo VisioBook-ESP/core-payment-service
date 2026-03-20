@@ -5,6 +5,64 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.5] - 2026-03-20
+
+### Added
+- **`tests/unit/controllers/webhook.controller.spec.ts`** : 3 tests unitaires couvrant `WebhookController`
+  - Webhook valide → `{ received: true }`
+  - Header `stripe-signature` absent → 400
+  - Signature invalide (Stripe SDK throw) → 400
+- **`tests/unit/guards/service-key.guard.spec.ts`** : 6 tests unitaires couvrant `ServiceKeyGuard`
+  - Clé valide → true
+  - Clé absente → 401
+  - Clé invalide → 401
+  - Whitelist `ALLOWED_SERVICES` — service autorisé → true
+  - Whitelist — service non autorisé → 403
+  - Whitelist — `x-service-name` absent → 403
+- **`tests/unit/middleware/http-exception.filter.spec.ts`** : 5 tests unitaires couvrant `GlobalExceptionFilter`
+  - `HttpException` objet → format standardisé avec statusCode/error/message
+  - `HttpException` string → format standardisé
+  - `Error` générique → 500
+  - `errorCode` présent → exposé dans la réponse
+  - Timestamp ISO valide dans chaque réponse
+
+### Changed
+- **`tests/unit/services/subscription.service.spec.ts`** : +11 tests — `upgradePlan` (6 cas), `downgradePlan` (5 cas), `createPortalSession` (3 cas)
+- **`tests/unit/controllers/subscription.controller.spec.ts`** : +3 tests — `upgradePlan`, `downgradePlan`, `getPortalSession`
+- **`tests/unit/services/quota.service.spec.ts`** : +4 tests — `resetQuota` (2 cas), `checkQuotaAvailable` storage (2 cas)
+- **`tests/unit/controllers/quota.controller.spec.ts`** : +1 test — `resetQuota`
+- **`tests/unit/services/webhook.service.spec.ts`** : +3 tests — `customer.subscription.created`, `customer.subscription.updated` (avec/sans userId)
+- **`tests/mocks/database.mock.ts`** : ajout de `updateSubscriptionPlan` et `resetQuotaUsage`
+- **`tests/mocks/stripe.mock.ts`** : ajout de `updateSubscription`
+- **`package.json` Jest config** : `collectCoverageFrom` affiné — exclusion des wrappers HTTP (`database.client`, `notification.client`, `user-service.client`, `user-service.mock`), modules NestJS, entities, DTOs, health — la couverture mesure uniquement la logique métier du service
+
+### Notes
+- Couverture de tests > 80% atteinte sur le périmètre métier (adapters, guards, middleware, services, controllers)
+- 88 tests, 100% pass
+
+## [0.3.4] - 2026-03-20
+
+### Added
+- **`tests/unit/adapters/stripe.adapter.spec.ts`** : 10 tests unitaires couvrant l'intégralité du `StripeAdapter`
+  - `createCustomer` (avec et sans nom)
+  - `createCheckoutSession` (vérification des params Stripe)
+  - `getSubscription`
+  - `cancelSubscription`
+  - `updateSubscription` (avec proration `create_prorations` et sans proration `none`)
+  - `createPortalSession`
+  - `verifyWebhookSignature` (succès + signature invalide → throw)
+  - Stripe SDK mocké via `jest.mock('stripe')` — aucun appel réseau réel
+- **`tests/unit/guards/jwt-auth.guard.spec.ts`** : 6 tests unitaires couvrant `JwtAuthGuard`
+  - Token valide → `req.user` injecté avec `userId`, `email`, `tier`
+  - Header `Authorization` absent → 401
+  - Format non-Bearer (ex: Basic auth) → 401
+  - Token vide après `Bearer ` → 401
+  - `UserServiceClient.getUserFromToken()` throw → 401
+  - `UserServiceClient` retourne 401 → 401 propagé
+
+### Notes
+- Configuration : `charts/values.yaml` est la source de vérité pour les variables d'environnement (Helm/K8s) — le `.env.example` est pour la doc locale uniquement
+
 ## [0.3.3] - 2026-03-13
 
 ### Changed
