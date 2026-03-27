@@ -179,7 +179,7 @@ describe('WebhookService', () => {
       await expect(service.handleStripeEvent(event)).resolves.toBeUndefined();
     });
 
-    it('should handle customer.subscription.updated with userId', async () => {
+    it('should handle customer.subscription.updated with status active — calls activateSubscription', async () => {
       const event = {
         id: 'evt_updated',
         type: 'customer.subscription.updated',
@@ -190,6 +190,41 @@ describe('WebhookService', () => {
             customer: 'cus_test_123',
             current_period_start: Math.floor(Date.now() / 1000),
             current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 3600,
+            items: { data: [{ price: { id: 'price_1TAVJXHhqOObOnmXf8SOVKMG' } }] },
+            metadata: { userId: 'user-123', planId: 'premium' },
+          },
+        },
+      } as unknown as Stripe.Event;
+
+      await service.handleStripeEvent(event);
+
+      expect(mockSubscriptionService.activateSubscription).toHaveBeenCalledWith(
+        'user-123',
+        'cus_test_123',
+        'sub_test_123',
+        'premium',
+        expect.any(String),
+        expect.any(String),
+      );
+      expect(mockNotificationClient.sendSubscriptionConfirmation).toHaveBeenCalledWith(
+        'user-123',
+        'premium',
+      );
+      expect(mockDatabaseClient.upsertSubscription).not.toHaveBeenCalled();
+    });
+
+    it('should handle customer.subscription.updated with status past_due — upserts only', async () => {
+      const event = {
+        id: 'evt_past_due',
+        type: 'customer.subscription.updated',
+        data: {
+          object: {
+            id: 'sub_test_123',
+            status: 'past_due',
+            customer: 'cus_test_123',
+            current_period_start: Math.floor(Date.now() / 1000),
+            current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 3600,
+            items: { data: [] },
             metadata: { userId: 'user-123', planId: 'premium' },
           },
         },
@@ -198,12 +233,9 @@ describe('WebhookService', () => {
       await service.handleStripeEvent(event);
 
       expect(mockDatabaseClient.upsertSubscription).toHaveBeenCalledWith(
-        expect.objectContaining({
-          userId: 'user-123',
-          stripeSubscriptionId: 'sub_test_123',
-          status: 'active',
-        }),
+        expect.objectContaining({ userId: 'user-123', status: 'past_due' }),
       );
+      expect(mockSubscriptionService.activateSubscription).not.toHaveBeenCalled();
     });
 
     it('should handle customer.subscription.updated without userId (early return)', async () => {

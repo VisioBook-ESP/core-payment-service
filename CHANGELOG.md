@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-03-27
+
+### Added
+- **`POST /api/v1/subscriptions/payment-intent`** : nouvel endpoint pour le parcours de paiement natif in-app (flutter_stripe Payment Sheet)
+  - Crée une subscription Stripe en statut `incomplete` via `payment_behavior: 'default_incomplete'`
+  - Retourne `{ clientSecret, customerId, ephemeralKey, subscriptionId }` prêts à être passés à `flutter_stripe initPaymentSheet()`
+  - L'activation de l'abonnement est déclenchée automatiquement par le webhook `customer.subscription.updated` après confirmation du paiement côté mobile
+- **`StripeAdapter.createSubscriptionWithPaymentIntent()`** : crée une subscription Stripe incomplète avec PaymentIntent embarqué (expand `latest_invoice.payment_intent`), définit les metadata `userId` / `planId` sur la subscription pour la résolution webhook
+- **`StripeAdapter.createEphemeralKey()`** : génère une ephemeral key Stripe liée au customer pour flutter_stripe
+- **`src/dto/payment-intent.dto.ts`** : `PaymentIntentRequestDto` (`planId`, `interval`) et `PaymentIntentResponseDto` (`clientSecret`, `customerId`, `ephemeralKey`, `subscriptionId`)
+
+### Changed
+- **`WebhookService.handleSubscriptionUpdated()`** : gère désormais le cas `status → active` en appelant `SubscriptionService.activateSubscription()` (mise à jour DB, tier utilisateur, quotas, notification) — couvre le flux Payment Sheet où la subscription transite de `incomplete` à `active` après confirmation du paiement
+  - Le `planId` est dérivé du `priceId` Stripe actuel (lookup dans `PLANS`) plutôt que des metadata, pour être robuste aux upgrades/downgrades où les metadata peuvent être obsolètes
+
 ## [0.3.5] - 2026-03-20
 
 ### Added

@@ -56,6 +56,8 @@ Checklist exhaustive des taches a accomplir pour le microservice `core-payment-s
   - [x] Methode `getSubscription()`
   - [x] Methode `cancelSubscription()`
   - [x] Methode `verifyWebhookSignature()`
+  - [x] Methode `createSubscriptionWithPaymentIntent()` - flux natif in-app
+  - [x] Methode `createEphemeralKey()` - flutter_stripe Payment Sheet
 - [x] Configuration produits/prix dans Stripe Dashboard (mode test)
   - [x] Plan Free (pas de prix Stripe)
   - [x] Plan Premium (monthly/yearly) — price IDs intégrés dans plans.config.ts
@@ -148,6 +150,7 @@ Checklist exhaustive des taches a accomplir pour le microservice `core-payment-s
 - [x] `POST /api/v1/subscriptions/downgrade` - Downgrade plan
 - [x] `POST /api/v1/quotas/reset` - Reset quotas (admin)
 - [x] `GET /api/v1/subscriptions/portal` - Customer portal Stripe
+- [x] `POST /api/v1/subscriptions/payment-intent` - PaymentIntent pour Payment Sheet natif (flutter_stripe)
 
 ### Integration Services Internes
 
@@ -454,11 +457,11 @@ Checklist exhaustive des taches a accomplir pour le microservice `core-payment-s
 
 | Priorite | Total | Termine | Progression |
 |----------|-------|---------|-------------|
-| P0 | 88 | 88 | 100% |
-| P1 | 64 | 64 | 100% |
+| P0 | 90 | 90 | 100% |
+| P1 | 65 | 65 | 100% |
 | P2 | 77 | 67 | 87% |
 | P3 | 55 | 0 | 0% |
-| **Total** | **284** | **219** | **77%** |
+| **Total** | **287** | **222** | **77%** |
 
 ### Jalons
 

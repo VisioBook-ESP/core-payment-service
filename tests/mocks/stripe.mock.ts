@@ -26,6 +26,13 @@ export const mockPortalSession = {
   url: 'https://billing.stripe.com/test',
 };
 
+export const mockPaymentIntentResponse = {
+  clientSecret: 'pi_test_123_secret_mock',
+  subscriptionId: 'sub_incomplete_123',
+};
+
+export const mockEphemeralKey = 'ek_test_mock_ephemeral_key';
+
 export const mockStripeAdapter = {
   createCustomer: jest.fn().mockResolvedValue(mockStripeCustomer),
   createCheckoutSession: jest.fn().mockResolvedValue(mockCheckoutSession),
@@ -33,6 +40,8 @@ export const mockStripeAdapter = {
   cancelSubscription: jest.fn().mockResolvedValue({ ...mockSubscription, status: 'canceled' }),
   updateSubscription: jest.fn().mockResolvedValue({ ...mockSubscription, status: 'active' }),
   createPortalSession: jest.fn().mockResolvedValue(mockPortalSession),
+  createSubscriptionWithPaymentIntent: jest.fn().mockResolvedValue(mockPaymentIntentResponse),
+  createEphemeralKey: jest.fn().mockResolvedValue(mockEphemeralKey),
   verifyWebhookSignature: jest.fn().mockReturnValue({
     id: 'evt_test_123',
     type: 'checkout.session.completed',

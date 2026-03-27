@@ -5,7 +5,7 @@ import { SubscriptionService } from '../../../src/subscription/subscription.serv
 import { StripeAdapter } from '../../../src/adapters/stripe.adapter';
 import { DatabaseClient } from '../../../src/services/database.client';
 import { UserServiceClient } from '../../../src/services/user-service.client';
-import { mockStripeAdapter } from '../../mocks/stripe.mock';
+import { mockStripeAdapter, mockStripeCustomer, mockPaymentIntentResponse, mockEphemeralKey } from '../../mocks/stripe.mock';
 import { mockDatabaseClient, mockSubscriptionEntity } from '../../mocks/database.mock';
 import { mockUserServiceClient, mockUserInfo } from '../../mocks/user-service.mock';
 
@@ -228,6 +228,74 @@ describe('SubscriptionService', () => {
       });
       mockStripeAdapter.updateSubscription.mockRejectedValueOnce(new Error('Stripe API error'));
       await expect(service.downgradePlan('user-123', 'premium')).rejects.toThrow(StripeException);
+    });
+  });
+
+  describe('createPaymentIntent', () => {
+    it('should create a new customer and return clientSecret, customerId, ephemeralKey, subscriptionId', async () => {
+      mockDatabaseClient.getSubscriptionByUserId.mockResolvedValueOnce(null);
+
+      const result = await service.createPaymentIntent('user-123', 'premium');
+
+      expect(mockStripeAdapter.createCustomer).toHaveBeenCalledWith(
+        mockUserInfo.email,
+        mockUserInfo.name,
+      );
+      expect(mockStripeAdapter.createSubscriptionWithPaymentIntent).toHaveBeenCalledWith({
+        customerId: mockStripeCustomer.id,
+        priceId: 'price_1TAVJXHhqOObOnmXf8SOVKMG',
+        userId: 'user-123',
+        planId: 'premium',
+      });
+      expect(mockStripeAdapter.createEphemeralKey).toHaveBeenCalledWith(mockStripeCustomer.id);
+      expect(result).toEqual({
+        clientSecret: mockPaymentIntentResponse.clientSecret,
+        customerId: mockStripeCustomer.id,
+        ephemeralKey: mockEphemeralKey,
+        subscriptionId: mockPaymentIntentResponse.subscriptionId,
+      });
+    });
+
+    it('should reuse existing stripeCustomerId when subscription exists (non-active)', async () => {
+      mockDatabaseClient.getSubscriptionByUserId.mockResolvedValueOnce({
+        ...mockSubscriptionEntity,
+        status: 'canceled',
+      });
+
+      await service.createPaymentIntent('user-123', 'premium');
+
+      expect(mockStripeAdapter.createCustomer).not.toHaveBeenCalled();
+      expect(mockStripeAdapter.createSubscriptionWithPaymentIntent).toHaveBeenCalledWith(
+        expect.objectContaining({ customerId: mockSubscriptionEntity.stripeCustomerId }),
+      );
+    });
+
+    it('should select yearly priceId when interval is year', async () => {
+      mockDatabaseClient.getSubscriptionByUserId.mockResolvedValueOnce(null);
+
+      await service.createPaymentIntent('user-123', 'premium', 'year');
+
+      expect(mockStripeAdapter.createSubscriptionWithPaymentIntent).toHaveBeenCalledWith(
+        expect.objectContaining({ priceId: 'price_1TAVJXHhqOObOnmXvilu4kwL' }),
+      );
+    });
+
+    it('should throw InvalidPlanException for unknown plan', async () => {
+      await expect(service.createPaymentIntent('user-123', 'unknown')).rejects.toThrow(
+        InvalidPlanException,
+      );
+    });
+
+    it('should throw InvalidPlanException for free plan', async () => {
+      await expect(service.createPaymentIntent('user-123', 'free')).rejects.toThrow(
+        InvalidPlanException,
+      );
+    });
+
+    it('should throw BadRequestException when user already has active subscription', async () => {
+      await expect(service.createPaymentIntent('user-123', 'premium')).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 

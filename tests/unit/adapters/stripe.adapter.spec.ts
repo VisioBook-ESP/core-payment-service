@@ -18,11 +18,15 @@ const mockStripeInstance = {
     retrieve: jest.fn(),
     cancel: jest.fn(),
     update: jest.fn(),
+    create: jest.fn(),
   },
   billingPortal: {
     sessions: {
       create: jest.fn(),
     },
+  },
+  ephemeralKeys: {
+    create: jest.fn(),
   },
   webhooks: {
     constructEvent: jest.fn(),
@@ -183,6 +187,57 @@ describe('StripeAdapter', () => {
         return_url: 'https://app.visiobook.com/settings',
       });
       expect(result).toEqual(mockPortal);
+    });
+  });
+
+  describe('createSubscriptionWithPaymentIntent', () => {
+    it('should create an incomplete subscription and return clientSecret + subscriptionId', async () => {
+      const mockSub = {
+        id: 'sub_incomplete_123',
+        latest_invoice: {
+          payment_intent: {
+            client_secret: 'pi_test_secret_abc',
+          },
+        },
+      };
+      mockStripeInstance.subscriptions.create.mockResolvedValue(mockSub);
+
+      const result = await adapter.createSubscriptionWithPaymentIntent({
+        customerId: 'cus_test_123',
+        priceId: 'price_1TAVJXHhqOObOnmXf8SOVKMG',
+        userId: 'user-123',
+        planId: 'premium',
+      });
+
+      expect(mockStripeInstance.subscriptions.create).toHaveBeenCalledWith({
+        customer: 'cus_test_123',
+        items: [{ price: 'price_1TAVJXHhqOObOnmXf8SOVKMG', quantity: 1 }],
+        payment_behavior: 'default_incomplete',
+        payment_settings: { save_default_payment_method: 'on_subscription' },
+        expand: ['latest_invoice.payment_intent'],
+        metadata: { userId: 'user-123', planId: 'premium' },
+      });
+      expect(result).toEqual({
+        clientSecret: 'pi_test_secret_abc',
+        subscriptionId: 'sub_incomplete_123',
+      });
+    });
+  });
+
+  describe('createEphemeralKey', () => {
+    it('should create and return the ephemeral key secret', async () => {
+      mockStripeInstance.ephemeralKeys.create.mockResolvedValue({
+        id: 'ek_test_123',
+        secret: 'ek_test_secret_xyz',
+      });
+
+      const result = await adapter.createEphemeralKey('cus_test_123');
+
+      expect(mockStripeInstance.ephemeralKeys.create).toHaveBeenCalledWith(
+        { customer: 'cus_test_123' },
+        { apiVersion: '2025-02-24.acacia' },
+      );
+      expect(result).toBe('ek_test_secret_xyz');
     });
   });
 
