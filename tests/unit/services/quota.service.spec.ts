@@ -133,5 +133,35 @@ describe('QuotaService', () => {
       const result = await service.checkQuotaAvailable('user-123', 'generation');
       expect(result).toBe(false);
     });
+
+    it('should return true when storage quota available', async () => {
+      const result = await service.checkQuotaAvailable('user-123', 'storage');
+      expect(result).toBe(true);
+    });
+
+    it('should return false when storage quota exhausted', async () => {
+      mockDatabaseClient.getQuotaByUserId.mockResolvedValueOnce({
+        ...mockQuotaEntity,
+        storageUsed: 10 * 1024 * 1024 * 1024,
+        storageLimit: 10 * 1024 * 1024 * 1024,
+      });
+      const result = await service.checkQuotaAvailable('user-123', 'storage');
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('resetQuota', () => {
+    it('should reset quota usage for user', async () => {
+      await service.resetQuota('user-123');
+      expect(mockDatabaseClient.resetQuotaUsage).toHaveBeenCalledWith(
+        'user-123',
+        expect.any(String),
+      );
+    });
+
+    it('should throw NotFoundException when quota not found', async () => {
+      mockDatabaseClient.getQuotaByUserId.mockResolvedValueOnce(null);
+      await expect(service.resetQuota('user-unknown')).rejects.toThrow(NotFoundException);
+    });
   });
 });

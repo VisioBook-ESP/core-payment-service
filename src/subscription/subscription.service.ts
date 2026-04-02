@@ -202,6 +202,50 @@ export class SubscriptionService {
     );
   }
 
+  async createPaymentIntent(
+    userId: string,
+    planId: string,
+    interval: 'month' | 'year' = 'month',
+  ): Promise<{ clientSecret: string; customerId: string; ephemeralKey: string; subscriptionId: string }> {
+    const plan = getPlanById(planId);
+    if (!plan) {
+      throw new InvalidPlanException(`Plan '${planId}' not found`);
+    }
+
+    const priceId = interval === 'year' ? plan.stripePriceIdYearly : plan.stripePriceId;
+    if (!priceId) {
+      throw new InvalidPlanException('Cannot subscribe to free plan');
+    }
+
+    const existing = await this.databaseClient.getSubscriptionByUserId(userId);
+    if (existing && existing.status === 'active') {
+      throw new BadRequestException('User already has an active subscription');
+    }
+
+    let stripeCustomerId: string;
+    if (existing?.stripeCustomerId) {
+      stripeCustomerId = existing.stripeCustomerId;
+    } else {
+      const user = await this.userServiceClient.getUserById(userId);
+      const customer = await this.stripeAdapter.createCustomer(user.email, user.name);
+      stripeCustomerId = customer.id;
+    }
+
+    const { clientSecret, subscriptionId } =
+      await this.stripeAdapter.createSubscriptionWithPaymentIntent({
+        customerId: stripeCustomerId,
+        priceId,
+        userId,
+        planId,
+      });
+
+    const ephemeralKey = await this.stripeAdapter.createEphemeralKey(stripeCustomerId);
+
+    this.logger.log(`PaymentIntent created: subscription ${subscriptionId} for user ${userId}`);
+
+    return { clientSecret, customerId: stripeCustomerId, ephemeralKey, subscriptionId };
+  }
+
   async createPortalSession(userId: string, returnUrl?: string): Promise<{ portalUrl: string }> {
     const subscription = await this.databaseClient.getSubscriptionByUserId(userId);
     if (!subscription?.stripeCustomerId) {

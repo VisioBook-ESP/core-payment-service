@@ -7,6 +7,7 @@ import { ChangePlanDto } from '../dto/change-plan.dto';
 import { PlanResponseDto } from '../dto/plan-response.dto';
 import { SubscriptionResponseDto, CheckoutResponseDto } from '../dto/subscription-response.dto';
 import { PortalSessionResponseDto } from '../dto/portal-session.dto';
+import { PaymentIntentRequestDto, PaymentIntentResponseDto } from '../dto/payment-intent.dto';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { AuthenticatedRequest } from '../guards/authenticated-request';
 
@@ -87,6 +88,24 @@ export class SubscriptionController {
   ): Promise<{ message: string }> {
     await this.subscriptionService.downgradePlan(req.user.userId, dto.planId);
     return { message: `Subscription downgraded to ${dto.planId}` };
+  }
+
+  @Post('payment-intent')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Creer un PaymentIntent pour Payment Sheet natif (flutter_stripe)',
+    description:
+      'Cree une subscription Stripe en statut incomplete et retourne le clientSecret, ' +
+      "customerId et ephemeralKey a passer a flutter_stripe initPaymentSheet(). " +
+      "L'activation de l'abonnement est effectuee automatiquement via webhook apres confirmation du paiement.",
+  })
+  @ApiResponse({ status: 201, type: PaymentIntentResponseDto })
+  async createPaymentIntent(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: PaymentIntentRequestDto,
+  ): Promise<PaymentIntentResponseDto> {
+    return this.subscriptionService.createPaymentIntent(req.user.userId, dto.planId, dto.interval);
   }
 
   @Get('portal')

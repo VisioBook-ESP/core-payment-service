@@ -5,6 +5,7 @@ import { SubscriptionService } from '../subscription/subscription.service';
 import { DatabaseClient } from '../services/database.client';
 import { NotificationClient } from '../services/notification.client';
 import { UserServiceClient } from '../services/user-service.client';
+import { PLANS } from '../config/plans.config';
 
 @Injectable()
 export class WebhookService {
@@ -80,11 +81,17 @@ export class WebhookService {
   private async handleSubscriptionUpdated(subscription: Stripe.Subscription): Promise<void> {
     this.logger.log(`Subscription updated: ${subscription.id}, status: ${subscription.status}`);
 
-    const customerId = subscription.customer as string;
     const userId = subscription.metadata?.userId;
     if (!userId) return;
 
-    const planId = subscription.metadata?.planId || 'premium';
+    // Derive planId from the actual price to handle upgrades/downgrades where metadata may be stale
+    const priceId = subscription.items?.data[0]?.price?.id;
+    const matchedPlan = PLANS.find(
+      (p) => p.stripePriceId === priceId || p.stripePriceIdYearly === priceId,
+    );
+    const planId = matchedPlan?.id ?? subscription.metadata?.planId ?? 'premium';
+
+    const customerId = subscription.customer as string;
 
     const statusMap: Record<string, 'active' | 'canceled' | 'past_due' | 'trialing'> = {
       active: 'active',
@@ -94,15 +101,28 @@ export class WebhookService {
     };
     const internalStatus = statusMap[subscription.status] ?? 'past_due';
 
-    await this.databaseClient.upsertSubscription({
-      userId,
-      stripeCustomerId: customerId,
-      stripeSubscriptionId: subscription.id,
-      planId,
-      status: internalStatus,
-      currentPeriodStart: new Date(subscription.current_period_start * 1000).toISOString(),
-      currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
-    });
+    if (internalStatus === 'active') {
+      // Covers Payment Sheet flow (incomplete → active) and handles upgrade/downgrade idempotently
+      await this.subscriptionService.activateSubscription(
+        userId,
+        customerId,
+        subscription.id,
+        planId,
+        new Date(subscription.current_period_start * 1000).toISOString(),
+        new Date(subscription.current_period_end * 1000).toISOString(),
+      );
+      await this.notificationClient.sendSubscriptionConfirmation(userId, planId);
+    } else {
+      await this.databaseClient.upsertSubscription({
+        userId,
+        stripeCustomerId: customerId,
+        stripeSubscriptionId: subscription.id,
+        planId,
+        status: internalStatus,
+        currentPeriodStart: new Date(subscription.current_period_start * 1000).toISOString(),
+        currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
+      });
+    }
   }
 
   private async handleSubscriptionDeleted(subscription: Stripe.Subscription): Promise<void> {

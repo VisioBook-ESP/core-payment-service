@@ -68,6 +68,40 @@ export class StripeAdapter {
     });
   }
 
+  async createSubscriptionWithPaymentIntent(params: {
+    customerId: string;
+    priceId: string;
+    userId: string;
+    planId: string;
+  }): Promise<{ clientSecret: string; subscriptionId: string }> {
+    this.logger.log(`Creating subscription with PaymentIntent for customer ${params.customerId}`);
+    const subscription = await this.stripe.subscriptions.create({
+      customer: params.customerId,
+      items: [{ price: params.priceId, quantity: 1 }],
+      payment_behavior: 'default_incomplete',
+      payment_settings: { save_default_payment_method: 'on_subscription' },
+      expand: ['latest_invoice.payment_intent'],
+      metadata: { userId: params.userId, planId: params.planId },
+    });
+
+    const invoice = subscription.latest_invoice as Stripe.Invoice;
+    const paymentIntent = invoice.payment_intent as Stripe.PaymentIntent;
+
+    return {
+      clientSecret: paymentIntent.client_secret!,
+      subscriptionId: subscription.id,
+    };
+  }
+
+  async createEphemeralKey(customerId: string): Promise<string> {
+    this.logger.log(`Creating ephemeral key for customer ${customerId}`);
+    const key = await this.stripe.ephemeralKeys.create(
+      { customer: customerId },
+      { apiVersion: '2025-02-24.acacia' },
+    );
+    return key.secret!;
+  }
+
   verifyWebhookSignature(payload: Buffer, signature: string): Stripe.Event {
     const webhookSecret = this.configService.getOrThrow<string>('STRIPE_WEBHOOK_SECRET');
     return this.stripe.webhooks.constructEvent(payload, signature, webhookSecret);

@@ -18,6 +18,7 @@ describe('QuotaController', () => {
       success: true,
       remaining: 44,
     }),
+    resetQuota: jest.fn().mockResolvedValue(undefined),
   };
 
   beforeEach(async () => {
@@ -54,6 +55,14 @@ describe('QuotaController', () => {
       });
       expect(result.success).toBe(true);
       expect(result.remaining).toBe(44);
+    });
+  });
+
+  describe('resetQuota', () => {
+    it('should reset quota and return success message', async () => {
+      const result = await controller.resetQuota({ userId: 'user-123' });
+      expect(result.message).toBe('Quota reset successfully');
+      expect(mockQuotaService.resetQuota).toHaveBeenCalledWith('user-123');
     });
   });
 });

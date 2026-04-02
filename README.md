@@ -239,7 +239,8 @@ sequenceDiagram
 |---------|----------|-------------|------|
 | GET | `/plans` | Liste des plans disponibles | Non |
 | GET | `/current` | Abonnement actuel | Oui |
-| POST | `/checkout` | Creer session checkout | Oui |
+| POST | `/checkout` | Creer session checkout (web, redirect Stripe) | Oui |
+| POST | `/payment-intent` | PaymentIntent pour Payment Sheet natif (flutter_stripe) | Oui |
 | POST | `/cancel` | Annuler abonnement | Oui |
 | POST | `/upgrade` | Upgrade plan | Oui |
 | POST | `/downgrade` | Downgrade plan | Oui |
@@ -390,6 +391,73 @@ export const plans = [
 ```
 
 ## Integration Stripe
+
+### Flux Payment Sheet natif (flutter_stripe)
+
+Parcours recommandé pour l'application mobile — aucune redirection externe, expérience 100% in-app avec Apple Pay / Google Pay / carte via la Payment Sheet de flutter_stripe.
+
+```mermaid
+sequenceDiagram
+    participant F as Flutter App
+    participant PS as core-payment-service
+    participant STRIPE as Stripe API
+
+    F->>PS: POST /subscriptions/payment-intent<br/>{ planId, interval }<br/>Authorization: Bearer <token>
+    PS->>STRIPE: Create Customer (si inexistant)
+    PS->>STRIPE: subscriptions.create (default_incomplete)<br/>+ expand latest_invoice.payment_intent
+    PS->>STRIPE: ephemeralKeys.create
+    PS-->>F: { clientSecret, customerId, ephemeralKey, subscriptionId }
+
+    F->>F: Stripe.initPaymentSheet(clientSecret, customerId, ephemeralKey)
+    F->>F: Stripe.presentPaymentSheet()
+    Note over F: L'utilisateur saisit sa carte / Apple Pay / Google Pay
+
+    STRIPE->>PS: POST /webhooks/stripe<br/>customer.subscription.updated (status: active)
+    PS->>PS: activateSubscription() — DB + tier + quota + notification
+
+    F->>PS: GET /subscriptions/current → status: "active"
+```
+
+**Ce que Flutter doit faire avec la réponse :**
+
+```dart
+// 1. Initialiser la Payment Sheet
+await Stripe.instance.initPaymentSheet(
+  paymentSheetData: SetupPaymentSheetParameters(
+    paymentIntentClientSecret: response.clientSecret,
+    customerEphemeralKeySecret: response.ephemeralKey,
+    customerId: response.customerId,
+    merchantDisplayName: 'VisioBook',
+  ),
+);
+
+// 2. Afficher la Payment Sheet
+await Stripe.instance.presentPaymentSheet();
+
+// 3. Attendre que le webhook active la subscription (1-2s)
+// puis interroger GET /subscriptions/current pour confirmer status: "active"
+```
+
+**Interface TypeScript de l'endpoint :**
+
+```typescript
+// POST /api/v1/subscriptions/payment-intent
+interface PaymentIntentRequest {
+  planId: 'premium' | 'enterprise';
+  interval?: 'month' | 'year'; // défaut: 'month'
+}
+
+interface PaymentIntentResponse {
+  clientSecret: string;    // paymentIntentClientSecret pour flutter_stripe
+  customerId: string;      // customerId pour flutter_stripe
+  ephemeralKey: string;    // customerEphemeralKeySecret pour flutter_stripe
+  subscriptionId: string;  // sub_xxx (statut incomplete, activé via webhook)
+}
+```
+
+### Flux Checkout Stripe (web, redirect)
+
+Pour le portail web — redirige vers une page Stripe hébergée. Voir [diagramme Checkout](#diagramme-de-flux-checkout-stripe).
 
 ### Webhooks supportes
 
@@ -557,20 +625,39 @@ npm run test:watch
 ```
 tests/
 ├── unit/
+│   ├── adapters/
+│   │   └── stripe.adapter.spec.ts      ✅ 10 tests (Stripe SDK mocké)
+│   ├── guards/
+│   │   └── jwt-auth.guard.spec.ts      ✅ 6 tests
 │   ├── services/
-│   │   ├── subscription.service.spec.ts
-│   │   ├── payment.service.spec.ts
-│   │   └── quota.service.spec.ts
+│   │   ├── subscription.service.spec.ts ✅
+│   │   ├── webhook.service.spec.ts      ✅
+│   │   └── quota.service.spec.ts        ✅
 │   └── controllers/
-│       ├── subscription.controller.spec.ts
-│       └── quota.controller.spec.ts
-├── integration/
+│       ├── subscription.controller.spec.ts ✅
+│       └── quota.controller.spec.ts        ✅
+├── integration/                         ⏳ à faire
 │   ├── subscription.e2e-spec.ts
-│   └── webhook.e2e-spec.ts
+│   ├── webhook.e2e-spec.ts
+│   └── quota.e2e-spec.ts
 └── mocks/
     ├── stripe.mock.ts
     ├── database.mock.ts
-    └── user-service.mock.ts
+    ├── user-service.mock.ts
+    └── notification.mock.ts
+```
+
+### Lancer un fichier de test spécifique
+
+```bash
+# Un seul fichier
+npm test -- --testPathPattern="stripe.adapter"
+
+# Plusieurs fichiers
+npm test -- --testPathPattern="stripe.adapter|jwt-auth"
+
+# Tous les tests unitaires avec couverture
+npm run test:cov
 ```
 
 ## Deploiement

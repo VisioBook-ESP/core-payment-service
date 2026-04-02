@@ -75,7 +75,17 @@
     },
     "collectCoverageFrom": [
       "src/**/*.(t|j)s",
-      "!src/main.ts"
+      "!src/main.ts",
+      "!src/app.module.ts",
+      "!src/**/*.module.ts",
+      "!src/entities/**",
+      "!src/dto/**",
+      "!src/guards/authenticated-request.ts",
+      "!src/services/database.client.ts",
+      "!src/services/notification.client.ts",
+      "!src/services/user-service.client.ts",
+      "!src/services/user-service.mock.ts",
+      "!src/health/**"
     ],
     "coverageDirectory": "./coverage",
     "testEnvironment": "node",
