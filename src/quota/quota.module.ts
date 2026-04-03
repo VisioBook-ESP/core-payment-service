@@ -1,13 +1,12 @@
 import { Module } from '@nestjs/common';
-import { HttpModule } from '@nestjs/axios';
 import { QuotaController } from './quota.controller';
 import { QuotaService } from './quota.service';
-import { DatabaseClient } from '../services/database.client';
+import { DatabaseModule } from '../database/database.module';
 
 @Module({
-  imports: [HttpModule],
+  imports: [DatabaseModule],
   controllers: [QuotaController],
-  providers: [QuotaService, DatabaseClient],
+  providers: [QuotaService],
   exports: [QuotaService],
 })
 export class QuotaModule {}

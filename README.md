@@ -45,9 +45,12 @@ graph TB
         end
     end
 
+    subgraph "Data"
+        DB[(PostgreSQL<br/>payment DB)]
+    end
+
     subgraph "External Services"
         STRIPE_API[Stripe API]
-        DB[core-database-service :8095]
         USER[core-user-service :8081]
         NOTIF[core-notification-service :8088]
     end
@@ -115,6 +118,7 @@ graph TB
 - Node.js >= 18.x
 - npm >= 9.x
 - Docker & Docker Compose
+- PostgreSQL 16+ (via Docker ou local)
 - Compte Stripe (mode test)
 
 ### Installation
@@ -136,11 +140,14 @@ cp .env.example .env
 ### Lancement en developpement
 
 ```bash
-# Demarrer les services dependants (PostgreSQL, Redis)
-docker-compose up -d
+# Demarrer PostgreSQL
+docker-compose up -d postgres
+
+# Lancer les migrations
+DATABASE_URL=postgresql://payment_app:localdevpass@localhost:5432/payment npm run migration:run
 
 # Lancer en mode developpement
-npm run start:dev
+DATABASE_URL=postgresql://payment_app:localdevpass@localhost:5432/payment npm run start:dev
 ```
 
 ### Lancement avec Docker
@@ -172,7 +179,9 @@ core-payment-service/
 │   ├── entities/             # Entites de base de donnees
 │   ├── guards/               # Guards d'authentification
 │   ├── middleware/           # Middlewares
-│   ├── config/               # Configuration
+│   ├── database/             # Module base de donnees (TypeORM)
+│   ├── migrations/           # Migrations TypeORM
+│   ├── config/               # Configuration (TypeORM, plans, etc.)
 │   ├── utils/                # Utilitaires
 │   └── main.ts               # Point d'entree
 ├── tests/
@@ -317,8 +326,8 @@ NODE_ENV=development
 PORT=8087
 API_PREFIX=/api/v1
 
-# Database (via core-database-service)
-DATABASE_SERVICE_URL=http://core-database-service:8095
+# Database (PostgreSQL direct — chaque microservice possede sa propre DB)
+DATABASE_URL=postgresql://payment_app:localdevpass@localhost:5432/payment
 
 # Stripe
 STRIPE_SECRET_KEY=sk_test_xxxxx
@@ -332,10 +341,6 @@ NOTIFICATION_SERVICE_URL=http://core-notification-service:8088
 # Auth
 # Pas de JWT_SECRET : la Gateway valide le token en amont et transmet
 # l'identite utilisateur via le header x-user-id.
-
-# Redis (cache)
-REDIS_HOST=localhost
-REDIS_PORT=6379
 
 # Logging
 LOG_LEVEL=info
@@ -551,7 +556,7 @@ Le `UserIdGuard` orchestre le flux d'authentification pour toutes les routes pro
 | core-user-service | `GET /api/v1/users/:id` | Recuperation infos utilisateur |
 | core-user-service | `PATCH /api/v1/users/:id/tier` | Mise a jour tier utilisateur |
 | core-notification-service | `POST /api/v1/email/send` | Emails confirmation |
-| core-database-service | `POST /api/v1/query` | Stockage transactions |
+| PostgreSQL (local) | TypeORM | Stockage subscriptions, quotas, transactions |
 
 ### Strategie de mock (developpement sans core-user-service)
 

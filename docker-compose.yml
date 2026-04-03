@@ -11,11 +11,9 @@ services:
       - NODE_ENV=development
       - PORT=8087
       - API_PREFIX=/api/v1
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-sk_test_placeholder}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-whsec_placeholder}
-      - DATABASE_SERVICE_URL=http://host.docker.internal:8095
+      - DATABASE_URL=postgresql://payment_app:localdevpass@postgres:5432/payment
       - USER_SERVICE_URL=http://host.docker.internal:8081
       - NOTIFICATION_SERVICE_URL=http://host.docker.internal:8088
       - INTERNAL_API_KEY=${INTERNAL_API_KEY:-dev-internal-key}
@@ -25,21 +23,25 @@ services:
       - ./src:/app/src
       - ./tests:/app/tests
     depends_on:
-      redis:
+      postgres:
         condition: service_healthy
     restart: unless-stopped
 
-  redis:
-    image: redis:7-alpine
+  postgres:
+    image: postgres:16-alpine
     ports:
-      - '6379:6379'
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: payment_app
+      POSTGRES_PASSWORD: localdevpass
+      POSTGRES_DB: payment
     healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
+      test: ['CMD-SHELL', 'pg_isready -U payment_app -d payment']
       interval: 10s
       timeout: 3s
       retries: 3
     volumes:
-      - redis-data:/data
+      - postgres-data:/var/lib/postgresql/data
 
 volumes:
-  redis-data:
+  postgres-data:

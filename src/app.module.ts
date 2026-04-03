@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { LoggerModule } from 'nestjs-pino';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { typeOrmConfig } from './config/typeorm.config';
 import { HealthModule } from './health/health.module';
 import { SubscriptionModule } from './subscription/subscription.module';
 import { QuotaModule } from './quota/quota.module';
@@ -13,6 +15,7 @@ import { WebhookModule } from './webhook/webhook.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    TypeOrmModule.forRootAsync(typeOrmConfig),
     LoggerModule.forRoot({
       pinoHttp: {
         transport:

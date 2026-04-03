@@ -152,11 +152,26 @@ Checklist exhaustive des taches a accomplir pour le microservice `core-payment-s
 - [x] `GET /api/v1/subscriptions/portal` - Customer portal Stripe
 - [x] `POST /api/v1/subscriptions/payment-intent` - PaymentIntent pour Payment Sheet natif (flutter_stripe)
 
+### Base de donnees PostgreSQL (propre au microservice)
+
+- [x] Installation TypeORM + driver PostgreSQL (`@nestjs/typeorm`, `typeorm`, `pg`)
+- [x] Configuration TypeORM (`src/config/typeorm.config.ts`, `src/config/data-source.ts`)
+- [x] Conversion entities interfaces → classes `@Entity()` decorees TypeORM
+  - [x] `SubscriptionEntity` avec colonnes UUID, timestamptz, index
+  - [x] `QuotaEntity` avec colonnes int/bigint pour quotas
+  - [x] `TransactionEntity` avec colonnes bigint pour amount
+- [x] `DatabaseModule` partage (`src/database/database.module.ts`)
+- [x] `DatabaseClient` reecrit avec TypeORM repositories (meme API publique)
+- [x] Migration initiale (`src/migrations/1743638400000-InitPaymentTables.ts`)
+- [x] PostgreSQL dans `docker-compose.yml` (postgres:16-alpine)
+- [x] `DATABASE_URL` dans `charts/values.yaml` et `.env.example`
+- [x] Scripts migration dans `package.json` (`migration:run`, `migration:revert`, `migration:generate`)
+
 ### Integration Services Internes
 
-- [x] Client HTTP vers `core-database-service`
-  - [x] Configuration HttpModule
-  - [x] `DatabaseClient` service
+- [x] ~~Client HTTP vers `core-database-service`~~ → Remplace par PostgreSQL direct (voir ci-dessus)
+  - [x] ~~Configuration HttpModule~~
+  - [x] `DatabaseClient` service (reecrit avec TypeORM)
   - [x] Methodes CRUD pour subscriptions
   - [x] Methodes CRUD pour quotas
   - [x] Methodes CRUD pour transactions
@@ -404,14 +419,6 @@ Checklist exhaustive des taches a accomplir pour le microservice `core-payment-s
   - [ ] Success threshold: 3
   - [ ] Timeout: 30s
 
-### Cache Redis
-
-- [ ] Installation `@nestjs/cache-manager` + `cache-manager-redis-store`
-- [ ] Cache plans (TTL 1h)
-- [ ] Cache quotas utilisateur (TTL 5min)
-- [ ] Invalidation cache sur webhook
-- [ ] Metriques cache hit/miss
-
 ### Retry Policies
 
 - [ ] Retry automatique webhooks (max 3)
@@ -421,7 +428,6 @@ Checklist exhaustive des taches a accomplir pour le microservice `core-payment-s
 ### Idempotency
 
 - [ ] Idempotency keys pour checkout
-- [ ] Stockage Redis cles idempotency
 - [ ] Prevention double processing webhooks
 
 ### Features avancees
@@ -494,4 +500,4 @@ Une tache est consideree comme terminee quand:
 
 ---
 
-*Derniere mise a jour: 2026-03-20 — v0.3.5 Couverture de tests > 80% atteinte (88 tests, 100% pass)*
+*Derniere mise a jour: 2026-04-03 — v0.6.0 Migration vers PostgreSQL direct avec TypeORM (remplacement core-database-service)*
