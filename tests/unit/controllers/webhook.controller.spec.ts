@@ -36,16 +36,18 @@ describe('WebhookController', () => {
 
   describe('handleStripeWebhook', () => {
     it('should return { received: true } on valid webhook', async () => {
+      const rawBody = Buffer.from('payload');
       const req = {
         headers: { 'stripe-signature': 't=123,v1=abc' },
-        body: Buffer.from('payload'),
+        body: JSON.parse(rawBody.toString()),
+        rawBody,
       } as any;
 
       const result = await controller.handleStripeWebhook(req);
 
       expect(result).toEqual({ received: true });
       expect(mockStripeAdapter.verifyWebhookSignature).toHaveBeenCalledWith(
-        req.body,
+        rawBody,
         't=123,v1=abc',
       );
       expect(mockWebhookService.handleStripeEvent).toHaveBeenCalledWith(mockEvent);
@@ -54,7 +56,8 @@ describe('WebhookController', () => {
     it('should throw BadRequestException when stripe-signature header is missing', async () => {
       const req = {
         headers: {},
-        body: Buffer.from('payload'),
+        body: {},
+        rawBody: Buffer.from('payload'),
       } as any;
 
       await expect(controller.handleStripeWebhook(req)).rejects.toThrow(BadRequestException);
@@ -68,7 +71,8 @@ describe('WebhookController', () => {
 
       const req = {
         headers: { 'stripe-signature': 'invalid-sig' },
-        body: Buffer.from('tampered'),
+        body: {},
+        rawBody: Buffer.from('tampered'),
       } as any;
 
       await expect(controller.handleStripeWebhook(req)).rejects.toThrow(BadRequestException);
