@@ -39,7 +39,7 @@ describe('WebhookController', () => {
       const rawBody = Buffer.from('payload');
       const req = {
         headers: { 'stripe-signature': 't=123,v1=abc' },
-        body: JSON.parse(rawBody.toString()),
+        body: {},
         rawBody,
       } as any;
 
