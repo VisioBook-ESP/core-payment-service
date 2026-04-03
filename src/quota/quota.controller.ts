@@ -1,11 +1,11 @@
 import { Controller, Get, Post, Body, Req, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiHeader } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiHeader, ApiResponse } from '@nestjs/swagger';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { QuotaService } from './quota.service';
 import { ConsumeQuotaDto } from '../dto/consume-quota.dto';
 import { ResetQuotaDto } from '../dto/reset-quota.dto';
 import { QuotaResponseDto, ConsumeQuotaResponseDto } from '../dto/quota-response.dto';
-import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { UserIdGuard } from '../guards/user-id.guard';
 import { ServiceKeyGuard } from '../guards/service-key.guard';
 import { AuthenticatedRequest } from '../guards/authenticated-request';
 
@@ -16,8 +16,8 @@ export class QuotaController {
   constructor(private readonly quotaService: QuotaService) {}
 
   @Get()
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @UseGuards(UserIdGuard)
+  @ApiHeader({ name: 'x-user-id', description: "UUID de l'utilisateur" })
   @ApiOperation({ summary: "Quotas de l'utilisateur connecte" })
   @ApiResponse({ status: 200, type: QuotaResponseDto })
   async getUserQuota(@Req() req: AuthenticatedRequest): Promise<QuotaResponseDto> {

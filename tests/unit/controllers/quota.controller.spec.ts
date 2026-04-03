@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { QuotaController } from '../../../src/quota/quota.controller';
 import { QuotaService } from '../../../src/quota/quota.service';
-import { JwtAuthGuard } from '../../../src/guards/jwt-auth.guard';
+import { UserIdGuard } from '../../../src/guards/user-id.guard';
 import { ServiceKeyGuard } from '../../../src/guards/service-key.guard';
 
 describe('QuotaController', () => {
@@ -28,7 +28,7 @@ describe('QuotaController', () => {
     })
       .overrideGuard(ThrottlerGuard)
       .useValue({ canActivate: () => true })
-      .overrideGuard(JwtAuthGuard)
+      .overrideGuard(UserIdGuard)
       .useValue({ canActivate: () => true })
       .overrideGuard(ServiceKeyGuard)
       .useValue({ canActivate: () => true })

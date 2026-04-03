@@ -5,11 +5,9 @@ import { StripeAdapter } from '../../../src/adapters/stripe.adapter';
 import { SubscriptionService } from '../../../src/subscription/subscription.service';
 import { DatabaseClient } from '../../../src/services/database.client';
 import { NotificationClient } from '../../../src/services/notification.client';
-import { UserServiceClient } from '../../../src/services/user-service.client';
 import { mockStripeAdapter } from '../../mocks/stripe.mock';
 import { mockDatabaseClient } from '../../mocks/database.mock';
 import { mockNotificationClient } from '../../mocks/notification.mock';
-import { mockUserServiceClient } from '../../mocks/user-service.mock';
 
 describe('WebhookService', () => {
   let service: WebhookService;
@@ -27,7 +25,6 @@ describe('WebhookService', () => {
         { provide: SubscriptionService, useValue: mockSubscriptionService },
         { provide: DatabaseClient, useValue: mockDatabaseClient },
         { provide: NotificationClient, useValue: mockNotificationClient },
-        { provide: UserServiceClient, useValue: mockUserServiceClient },
       ],
     }).compile();
 
@@ -85,7 +82,6 @@ describe('WebhookService', () => {
         'sub_test_123',
         'canceled',
       );
-      expect(mockUserServiceClient.updateUserTier).toHaveBeenCalledWith('user-123', 'free');
       expect(mockNotificationClient.sendSubscriptionCanceled).toHaveBeenCalledWith('user-123');
     });
 

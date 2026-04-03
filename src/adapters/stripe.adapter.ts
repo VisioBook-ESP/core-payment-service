@@ -13,9 +13,9 @@ export class StripeAdapter {
     });
   }
 
-  async createCustomer(email: string, name?: string): Promise<Stripe.Customer> {
-    this.logger.log(`Creating Stripe customer for ${email}`);
-    return this.stripe.customers.create({ email, name });
+  async createCustomer(userId: string): Promise<Stripe.Customer> {
+    this.logger.log(`Creating Stripe customer for user ${userId}`);
+    return this.stripe.customers.create({ metadata: { userId } });
   }
 
   async createCheckoutSession(params: {

@@ -62,29 +62,16 @@ describe('StripeAdapter', () => {
   });
 
   describe('createCustomer', () => {
-    it('should create a Stripe customer with email and name', async () => {
-      const mockCustomer = { id: 'cus_test_123', email: 'test@visiobook.com' };
+    it('should create a Stripe customer with userId in metadata', async () => {
+      const mockCustomer = { id: 'cus_test_123', metadata: { userId: 'user-123' } };
       mockStripeInstance.customers.create.mockResolvedValue(mockCustomer);
 
-      const result = await adapter.createCustomer('test@visiobook.com', 'Test User');
+      const result = await adapter.createCustomer('user-123');
 
       expect(mockStripeInstance.customers.create).toHaveBeenCalledWith({
-        email: 'test@visiobook.com',
-        name: 'Test User',
+        metadata: { userId: 'user-123' },
       });
       expect(result).toEqual(mockCustomer);
-    });
-
-    it('should create a customer without name', async () => {
-      const mockCustomer = { id: 'cus_test_456', email: 'test@visiobook.com' };
-      mockStripeInstance.customers.create.mockResolvedValue(mockCustomer);
-
-      await adapter.createCustomer('test@visiobook.com');
-
-      expect(mockStripeInstance.customers.create).toHaveBeenCalledWith({
-        email: 'test@visiobook.com',
-        name: undefined,
-      });
     });
   });
 
