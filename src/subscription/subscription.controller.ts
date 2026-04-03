@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Body, Req, Query, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiHeader, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { ThrottlerGuard, Throttle } from '@nestjs/throttler';
 import { SubscriptionService } from './subscription.service';
 import { CreateCheckoutDto } from '../dto/create-checkout.dto';
@@ -8,7 +8,7 @@ import { PlanResponseDto } from '../dto/plan-response.dto';
 import { SubscriptionResponseDto, CheckoutResponseDto } from '../dto/subscription-response.dto';
 import { PortalSessionResponseDto } from '../dto/portal-session.dto';
 import { PaymentIntentRequestDto, PaymentIntentResponseDto } from '../dto/payment-intent.dto';
-import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { UserIdGuard } from '../guards/user-id.guard';
 import { AuthenticatedRequest } from '../guards/authenticated-request';
 
 @ApiTags('Subscriptions')
@@ -26,8 +26,8 @@ export class SubscriptionController {
   }
 
   @Get('current')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @UseGuards(UserIdGuard)
+  @ApiHeader({ name: 'x-user-id', description: "UUID de l'utilisateur" })
   @ApiOperation({ summary: "Abonnement actuel de l'utilisateur" })
   @ApiResponse({ status: 200, type: SubscriptionResponseDto })
   async getCurrentSubscription(
@@ -37,8 +37,8 @@ export class SubscriptionController {
   }
 
   @Post('checkout')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @UseGuards(UserIdGuard)
+  @ApiHeader({ name: 'x-user-id', description: "UUID de l'utilisateur" })
   @ApiOperation({ summary: 'Creer une session de checkout Stripe' })
   @ApiResponse({ status: 201, type: CheckoutResponseDto })
   async createCheckout(
@@ -55,8 +55,8 @@ export class SubscriptionController {
   }
 
   @Post('cancel')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @UseGuards(UserIdGuard)
+  @ApiHeader({ name: 'x-user-id', description: "UUID de l'utilisateur" })
   @ApiOperation({ summary: "Annuler l'abonnement" })
   @ApiResponse({ status: 200 })
   async cancelSubscription(@Req() req: AuthenticatedRequest): Promise<{ message: string }> {
@@ -65,8 +65,8 @@ export class SubscriptionController {
   }
 
   @Post('upgrade')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @UseGuards(UserIdGuard)
+  @ApiHeader({ name: 'x-user-id', description: "UUID de l'utilisateur" })
   @ApiOperation({ summary: 'Upgrader vers un plan superieur' })
   @ApiResponse({ status: 200 })
   async upgradePlan(
@@ -78,8 +78,8 @@ export class SubscriptionController {
   }
 
   @Post('downgrade')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @UseGuards(UserIdGuard)
+  @ApiHeader({ name: 'x-user-id', description: "UUID de l'utilisateur" })
   @ApiOperation({ summary: 'Downgrader vers un plan inferieur' })
   @ApiResponse({ status: 200 })
   async downgradePlan(
@@ -91,8 +91,8 @@ export class SubscriptionController {
   }
 
   @Post('payment-intent')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @UseGuards(UserIdGuard)
+  @ApiHeader({ name: 'x-user-id', description: "UUID de l'utilisateur" })
   @ApiOperation({
     summary: 'Creer un PaymentIntent pour Payment Sheet natif (flutter_stripe)',
     description:
@@ -109,8 +109,8 @@ export class SubscriptionController {
   }
 
   @Get('portal')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @UseGuards(UserIdGuard)
+  @ApiHeader({ name: 'x-user-id', description: "UUID de l'utilisateur" })
   @ApiOperation({ summary: "Obtenir l'URL du portail de facturation Stripe" })
   @ApiQuery({ name: 'returnUrl', required: false, description: 'URL de retour apres le portail' })
   @ApiResponse({ status: 200, type: PortalSessionResponseDto })

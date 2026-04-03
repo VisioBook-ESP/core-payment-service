@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { SubscriptionController } from '../../../src/subscription/subscription.controller';
 import { SubscriptionService } from '../../../src/subscription/subscription.service';
-import { JwtAuthGuard } from '../../../src/guards/jwt-auth.guard';
+import { UserIdGuard } from '../../../src/guards/user-id.guard';
 import { PLANS } from '../../../src/config/plans.config';
 import { mockSubscriptionEntity } from '../../mocks/database.mock';
 
@@ -28,7 +28,7 @@ describe('SubscriptionController', () => {
     })
       .overrideGuard(ThrottlerGuard)
       .useValue({ canActivate: () => true })
-      .overrideGuard(JwtAuthGuard)
+      .overrideGuard(UserIdGuard)
       .useValue({ canActivate: () => true })
       .compile();
 

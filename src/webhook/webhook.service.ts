@@ -4,7 +4,6 @@ import { StripeAdapter } from '../adapters/stripe.adapter';
 import { SubscriptionService } from '../subscription/subscription.service';
 import { DatabaseClient } from '../services/database.client';
 import { NotificationClient } from '../services/notification.client';
-import { UserServiceClient } from '../services/user-service.client';
 import { PLANS } from '../config/plans.config';
 
 @Injectable()
@@ -16,7 +15,6 @@ export class WebhookService {
     private readonly subscriptionService: SubscriptionService,
     private readonly databaseClient: DatabaseClient,
     private readonly notificationClient: NotificationClient,
-    private readonly userServiceClient: UserServiceClient,
   ) {}
 
   async handleStripeEvent(event: Stripe.Event): Promise<void> {
@@ -132,7 +130,6 @@ export class WebhookService {
     if (!userId) return;
 
     await this.databaseClient.updateSubscriptionStatusByStripeId(subscription.id, 'canceled');
-    await this.userServiceClient.updateUserTier(userId, 'free');
     await this.notificationClient.sendSubscriptionCanceled(userId);
   }
 

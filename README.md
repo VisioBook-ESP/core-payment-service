@@ -7,8 +7,9 @@
 
 Microservice de gestion des paiements, abonnements et quotas pour la plateforme VisioBook.
 
-> **Authentification** : Les tokens JWT sont valides par la Gateway en amont.
-> Ce service recoit un token deja valide et interroge `core-user-service` pour resoudre l'identite utilisateur.
+> **Authentification** : L'identite utilisateur est transmise par l'upstream (Gateway)
+> via le header `x-user-id`. Ce service ne valide aucun token — il utilise directement
+> le `userId` recu pour toutes les operations metier.
 
 ## Architecture
 
@@ -204,12 +205,9 @@ sequenceDiagram
     participant US as core-user-service
     participant NS as Notification Service
 
-    C->>PS: POST /subscriptions/checkout<br/>{ planId: "premium" }<br/>Authorization: Bearer <token>
+    C->>PS: POST /subscriptions/checkout<br/>{ planId: "premium" }<br/>x-user-id: <userId>
 
-    Note over C,PS: Token deja valide par la Gateway
-
-    PS->>US: GET /users/me<br/>Authorization: Bearer <token>
-    US-->>PS: { id, email, tier }
+    Note over C,PS: userId transmis par la Gateway via header x-user-id
 
     PS->>STRIPE: Create checkout session
     STRIPE-->>PS: { sessionId, url }
@@ -238,18 +236,18 @@ sequenceDiagram
 | Methode | Endpoint | Description | Auth |
 |---------|----------|-------------|------|
 | GET | `/plans` | Liste des plans disponibles | Non |
-| GET | `/current` | Abonnement actuel | Oui |
-| POST | `/checkout` | Creer session checkout (web, redirect Stripe) | Oui |
-| POST | `/payment-intent` | PaymentIntent pour Payment Sheet natif (flutter_stripe) | Oui |
-| POST | `/cancel` | Annuler abonnement | Oui |
-| POST | `/upgrade` | Upgrade plan | Oui |
-| POST | `/downgrade` | Downgrade plan | Oui |
+| GET | `/current` | Abonnement actuel | x-user-id |
+| POST | `/checkout` | Creer session checkout (web, redirect Stripe) | x-user-id |
+| POST | `/payment-intent` | PaymentIntent pour Payment Sheet natif (flutter_stripe) | x-user-id |
+| POST | `/cancel` | Annuler abonnement | x-user-id |
+| POST | `/upgrade` | Upgrade plan | x-user-id |
+| POST | `/downgrade` | Downgrade plan | x-user-id |
 
 ### QuotaController (`/api/v1/quotas`)
 
 | Methode | Endpoint | Description | Auth |
 |---------|----------|-------------|------|
-| GET | `/` | Quotas utilisateur | Oui |
+| GET | `/` | Quotas utilisateur | x-user-id |
 | POST | `/consume` | Consommer quota | Service-only |
 | POST | `/reset` | Reset quotas (admin) | Admin |
 
@@ -331,9 +329,9 @@ STRIPE_WEBHOOK_SECRET=whsec_xxxxx
 USER_SERVICE_URL=http://core-user-service:8081
 NOTIFICATION_SERVICE_URL=http://core-notification-service:8088
 
-# JWT
-# Pas de JWT_SECRET : la validation du token est assuree par la Gateway.
-# Le token est transmis au core-user-service pour resoudre l'identite utilisateur.
+# Auth
+# Pas de JWT_SECRET : la Gateway valide le token en amont et transmet
+# l'identite utilisateur via le header x-user-id.
 
 # Redis (cache)
 REDIS_HOST=localhost
@@ -402,7 +400,7 @@ sequenceDiagram
     participant PS as core-payment-service
     participant STRIPE as Stripe API
 
-    F->>PS: POST /subscriptions/payment-intent<br/>{ planId, interval }<br/>Authorization: Bearer <token>
+    F->>PS: POST /subscriptions/payment-intent<br/>{ planId, interval }<br/>x-user-id: <userId>
     PS->>STRIPE: Create Customer (si inexistant)
     PS->>STRIPE: subscriptions.create (default_incomplete)<br/>+ expand latest_invoice.payment_intent
     PS->>STRIPE: ephemeralKeys.create
@@ -512,51 +510,45 @@ export const mockStripe = {
 ### Flux d'authentification
 
 ```
-Upstream (token deja valide) --> core-payment-service (recoit le token en Authorization: Bearer)
-                                           |
-                                           +--> core-user-service GET /api/v1/users/me
-                                                     Authorization: Bearer <token>
-                                                     |
-                                                     v
-                                               { id, email, tier }
+Upstream (Gateway) --> core-payment-service
+                       Header: x-user-id: <userId>
+                       |
+                       +--> UserIdGuard extrait le userId du header
+                            et l'injecte dans req.user
 ```
 
-> **Note** : Ce service ne valide pas le JWT lui-meme. L'upstream (Gateway ou autre
-> microservice) s'en charge avant de transmettre la requete. La source exacte du token
-> n'est pas encore determinee ; cela est sans importance ici : le token est considere
-> deja valide et securise.
-> Le JwtAuthGuard extrait le token Bearer, appelle `core-user-service` pour obtenir
-> l'identite de l'utilisateur (userId, email, etc.) et l'injecte dans la requete.
+> **Note** : Ce service ne valide aucun token. L'upstream (Gateway) s'en charge
+> et transmet l'identite utilisateur via le header `x-user-id`.
+> Le `UserIdGuard` extrait ce header et l'injecte dans la requete — si le header
+> est absent, une erreur 401 est retournee.
 
 ### Contrat core-user-service
 
-Toutes les routes protegees de ce service transmettent le Bearer token a `core-user-service`
-pour resoudre l'identite de l'utilisateur. Aucune verification cryptographique n'est effectuee
-par ce service.
+Ce service appelle `core-user-service` uniquement pour les operations metier
+(recuperer les infos utilisateur, mettre a jour le tier) — jamais pour l'authentification.
 
 ```typescript
-// Contrat attendu : core-user-service GET /api/v1/users/me
-// Header : Authorization: Bearer <token>
-interface UserIdentity {
-  id: string;    // UUID de l'utilisateur — utilise pour toutes les operations metier
+// core-user-service GET /api/v1/users/:id
+interface UserInfo {
+  id: string;    // UUID de l'utilisateur
   email: string; // Email de l'utilisateur
-  tier: 'free' | 'premium' | 'enterprise'; // Plan actuel
+  name?: string; // Nom (optionnel)
+  tier: string;  // Plan actuel
 }
 ```
 
-Le `JwtAuthGuard` orchestre ce flux de maniere transparente pour toutes les routes protegees :
+Le `UserIdGuard` orchestre le flux d'authentification pour toutes les routes protegees :
 
-1. Extraire le Bearer token du header `Authorization`
-2. Appeler `UserServiceClient.getUserFromToken(token)` → `GET /api/v1/users/me`
-3. Injecter l'objet `UserIdentity` dans `req.user`
-4. Retourner HTTP 401 si le token est absent ou si `core-user-service` retourne une erreur
+1. Extraire le `userId` du header `x-user-id`
+2. Injecter `{ userId }` dans `req.user`
+3. Retourner HTTP 401 si le header est absent
 
 ### Appels sortants
 
 | Service cible | Endpoint | Objectif |
 |---------------|----------|----------|
 | Stripe API | SDK | Traitement paiements |
-| core-user-service | `GET /api/v1/users/me` (Bearer token) | Resolution identite utilisateur a partir du token |
+| core-user-service | `GET /api/v1/users/:id` | Recuperation infos utilisateur |
 | core-user-service | `PATCH /api/v1/users/:id/tier` | Mise a jour tier utilisateur |
 | core-notification-service | `POST /api/v1/email/send` | Emails confirmation |
 | core-database-service | `POST /api/v1/query` | Stockage transactions |
@@ -577,17 +569,13 @@ Quand `USER_SERVICE_MOCK=true`, le module injecte `UserServiceMock` a la place d
 // tests/mocks/user-service.mock.ts
 // Egalement utilise en developpement local quand USER_SERVICE_MOCK=true
 export const mockUserServiceClient = {
-  getUserFromToken: jest.fn().mockResolvedValue({
-    id: 'mock-user-id-00000001',
-    email: 'dev@visiobook.com',
-    tier: 'premium',
-  }),
   getUserById: jest.fn().mockResolvedValue({
-    id: 'mock-user-id-00000001',
-    email: 'dev@visiobook.com',
-    tier: 'premium',
+    id: 'user-123',
+    email: 'test@visiobook.com',
+    name: 'Test User',
+    tier: 'free',
   }),
-  updateUserTier: jest.fn().mockResolvedValue({ success: true }),
+  updateUserTier: jest.fn().mockResolvedValue(undefined),
 };
 ```
 
@@ -628,7 +616,7 @@ tests/
 │   ├── adapters/
 │   │   └── stripe.adapter.spec.ts      ✅ 10 tests (Stripe SDK mocké)
 │   ├── guards/
-│   │   └── jwt-auth.guard.spec.ts      ✅ 6 tests
+│   │   └── user-id.guard.spec.ts       ✅ 4 tests
 │   ├── services/
 │   │   ├── subscription.service.spec.ts ✅
 │   │   ├── webhook.service.spec.ts      ✅
@@ -654,7 +642,7 @@ tests/
 npm test -- --testPathPattern="stripe.adapter"
 
 # Plusieurs fichiers
-npm test -- --testPathPattern="stripe.adapter|jwt-auth"
+npm test -- --testPathPattern="stripe.adapter|user-id"
 
 # Tous les tests unitaires avec couverture
 npm run test:cov

@@ -3,7 +3,6 @@ import { StripeAdapter } from '../adapters/stripe.adapter';
 import { PLANS, getPlanById, PlanConfig } from '../config/plans.config';
 import { SubscriptionEntity } from '../entities/subscription.entity';
 import { DatabaseClient } from '../services/database.client';
-import { UserServiceClient } from '../services/user-service.client';
 import {
   SubscriptionNotFoundException,
   InvalidPlanException,
@@ -19,7 +18,6 @@ export class SubscriptionService {
   constructor(
     private readonly stripeAdapter: StripeAdapter,
     private readonly databaseClient: DatabaseClient,
-    private readonly userServiceClient: UserServiceClient,
   ) {}
 
   getPlans(): PlanConfig[] {
@@ -56,8 +54,7 @@ export class SubscriptionService {
     if (existing?.stripeCustomerId) {
       stripeCustomerId = existing.stripeCustomerId;
     } else {
-      const user = await this.userServiceClient.getUserById(userId);
-      const customer = await this.stripeAdapter.createCustomer(user.email, user.name);
+      const customer = await this.stripeAdapter.createCustomer(userId);
       stripeCustomerId = customer.id;
     }
 
@@ -84,7 +81,6 @@ export class SubscriptionService {
 
     await this.stripeAdapter.cancelSubscription(subscription.stripeSubscriptionId);
     await this.databaseClient.updateSubscriptionStatus(subscription.id, 'canceled');
-    await this.userServiceClient.updateUserTier(userId, 'free');
 
     this.logger.log(`Subscription canceled for user ${userId}`);
   }
@@ -106,8 +102,6 @@ export class SubscriptionService {
       currentPeriodStart: periodStart,
       currentPeriodEnd: periodEnd,
     });
-
-    await this.userServiceClient.updateUserTier(userId, planId);
 
     const plan = getPlanById(planId);
     if (plan) {
@@ -150,7 +144,6 @@ export class SubscriptionService {
     }
 
     await this.databaseClient.updateSubscriptionPlan(subscription.id, newPlanId);
-    await this.userServiceClient.updateUserTier(userId, newPlanId);
 
     const plan = getPlanById(newPlanId);
     if (plan) {
@@ -195,7 +188,6 @@ export class SubscriptionService {
     }
 
     await this.databaseClient.updateSubscriptionPlan(subscription.id, newPlanId);
-    await this.userServiceClient.updateUserTier(userId, newPlanId);
 
     this.logger.log(
       `Subscription downgraded for user ${userId}: ${subscription.planId} -> ${newPlanId}`,
@@ -226,8 +218,7 @@ export class SubscriptionService {
     if (existing?.stripeCustomerId) {
       stripeCustomerId = existing.stripeCustomerId;
     } else {
-      const user = await this.userServiceClient.getUserById(userId);
-      const customer = await this.stripeAdapter.createCustomer(user.email, user.name);
+      const customer = await this.stripeAdapter.createCustomer(userId);
       stripeCustomerId = customer.id;
     }
 

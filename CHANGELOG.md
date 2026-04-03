@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-04-02
+
+### Changed
+- **Architecture auth** : remplacement du `JwtAuthGuard` (Bearer token + appel `core-user-service`) par un `UserIdGuard` qui extrait directement le header `x-user-id` transmis par la Gateway
+  - Ce service ne manipule plus aucun token — l'authentification est entierement deleguee a l'upstream
+  - Le `userId` est injecte dans `req.user` par le guard, sans appel reseau
+- **`src/guards/jwt-auth.guard.ts`** → supprime, remplace par **`src/guards/user-id.guard.ts`**
+- **`src/guards/authenticated-request.ts`** : interface `AuthenticatedUser` simplifiee — ne contient plus que `userId` (suppression de `email` et `tier`)
+- **`src/services/user-service.client.ts`** : suppression de `getUserFromToken()` et de l'interface `UserIdentity` — le client ne sert plus qu'aux operations metier (`getUserById`, `updateUserTier`)
+- **`src/services/user-service.mock.ts`** : suppression de `getUserFromToken()`
+- **`src/subscription/subscription.controller.ts`** : `@UseGuards(UserIdGuard)` + `@ApiHeader('x-user-id')` au lieu de `@UseGuards(JwtAuthGuard)` + `@ApiBearerAuth()`
+- **`src/quota/quota.controller.ts`** : idem
+- **`src/subscription/subscription.module.ts`** : suppression de `JwtAuthGuard` des providers
+- **`src/quota/quota.module.ts`** : suppression de `JwtAuthGuard` et du `userServiceProvider` (inutile — `QuotaService` n'utilise pas `UserServiceClient`)
+- **`src/webhook/webhook.module.ts`** : suppression de l'import `JwtAuthGuard`
+
+### Tests
+- **`tests/unit/guards/jwt-auth.guard.spec.ts`** → supprime, remplace par **`tests/unit/guards/user-id.guard.spec.ts`** (4 tests)
+  - Header `x-user-id` present → `req.user.userId` injecte
+  - Header absent → 401
+  - Header `undefined` → 401
+  - Valeur UUID quelconque → acceptee
+- **`tests/unit/controllers/subscription.controller.spec.ts`** : `UserIdGuard` au lieu de `JwtAuthGuard`
+- **`tests/unit/controllers/quota.controller.spec.ts`** : idem
+- **`tests/mocks/user-service.mock.ts`** : suppression de `getUserFromToken` et `mockUserIdentity`
+
 ## [0.4.0] - 2026-03-27
 
 ### Added

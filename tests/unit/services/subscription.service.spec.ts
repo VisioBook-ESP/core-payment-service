@@ -4,10 +4,9 @@ import { InvalidPlanException, SubscriptionNotFoundException, StripeException } 
 import { SubscriptionService } from '../../../src/subscription/subscription.service';
 import { StripeAdapter } from '../../../src/adapters/stripe.adapter';
 import { DatabaseClient } from '../../../src/services/database.client';
-import { UserServiceClient } from '../../../src/services/user-service.client';
 import { mockStripeAdapter, mockStripeCustomer, mockPaymentIntentResponse, mockEphemeralKey } from '../../mocks/stripe.mock';
 import { mockDatabaseClient, mockSubscriptionEntity } from '../../mocks/database.mock';
-import { mockUserServiceClient, mockUserInfo } from '../../mocks/user-service.mock';
+
 
 describe('SubscriptionService', () => {
   let service: SubscriptionService;
@@ -20,7 +19,6 @@ describe('SubscriptionService', () => {
         SubscriptionService,
         { provide: StripeAdapter, useValue: mockStripeAdapter },
         { provide: DatabaseClient, useValue: mockDatabaseClient },
-        { provide: UserServiceClient, useValue: mockUserServiceClient },
       ],
     }).compile();
 
@@ -70,10 +68,7 @@ describe('SubscriptionService', () => {
 
       expect(result).toHaveProperty('sessionId');
       expect(result).toHaveProperty('checkoutUrl');
-      expect(mockStripeAdapter.createCustomer).toHaveBeenCalledWith(
-        mockUserInfo.email,
-        mockUserInfo.name,
-      );
+      expect(mockStripeAdapter.createCustomer).toHaveBeenCalledWith('user-123');
       expect(mockStripeAdapter.createCheckoutSession).toHaveBeenCalled();
     });
 
@@ -126,7 +121,6 @@ describe('SubscriptionService', () => {
         'sub-entity-123',
         'canceled',
       );
-      expect(mockUserServiceClient.updateUserTier).toHaveBeenCalledWith('user-123', 'free');
     });
 
     it('should throw when no active subscription', async () => {
@@ -137,7 +131,7 @@ describe('SubscriptionService', () => {
   });
 
   describe('activateSubscription', () => {
-    it('should activate subscription and update user tier', async () => {
+    it('should activate subscription and upsert quota', async () => {
       await service.activateSubscription(
         'user-123',
         'cus_test_123',
@@ -148,7 +142,6 @@ describe('SubscriptionService', () => {
       );
 
       expect(mockDatabaseClient.upsertSubscription).toHaveBeenCalled();
-      expect(mockUserServiceClient.updateUserTier).toHaveBeenCalledWith('user-123', 'premium');
       expect(mockDatabaseClient.upsertQuota).toHaveBeenCalled();
     });
   });
@@ -163,7 +156,6 @@ describe('SubscriptionService', () => {
         true,
       );
       expect(mockDatabaseClient.updateSubscriptionPlan).toHaveBeenCalledWith('sub-entity-123', 'enterprise');
-      expect(mockUserServiceClient.updateUserTier).toHaveBeenCalledWith('user-123', 'enterprise');
       expect(mockDatabaseClient.upsertQuota).toHaveBeenCalled();
     });
 
@@ -205,7 +197,6 @@ describe('SubscriptionService', () => {
         false,
       );
       expect(mockDatabaseClient.updateSubscriptionPlan).toHaveBeenCalledWith('sub-entity-123', 'premium');
-      expect(mockUserServiceClient.updateUserTier).toHaveBeenCalledWith('user-123', 'premium');
     });
 
     it('should throw InvalidPlanException for invalid plan', async () => {
@@ -237,10 +228,7 @@ describe('SubscriptionService', () => {
 
       const result = await service.createPaymentIntent('user-123', 'premium');
 
-      expect(mockStripeAdapter.createCustomer).toHaveBeenCalledWith(
-        mockUserInfo.email,
-        mockUserInfo.name,
-      );
+      expect(mockStripeAdapter.createCustomer).toHaveBeenCalledWith('user-123');
       expect(mockStripeAdapter.createSubscriptionWithPaymentIntent).toHaveBeenCalledWith({
         customerId: mockStripeCustomer.id,
         priceId: 'price_1TAVJXHhqOObOnmXf8SOVKMG',
