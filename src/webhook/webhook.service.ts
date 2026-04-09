@@ -3,7 +3,6 @@ import Stripe from 'stripe';
 import { StripeAdapter } from '../adapters/stripe.adapter';
 import { SubscriptionService } from '../subscription/subscription.service';
 import { DatabaseClient } from '../services/database.client';
-import { NotificationClient } from '../services/notification.client';
 import { PLANS } from '../config/plans.config';
 
 @Injectable()
@@ -14,7 +13,6 @@ export class WebhookService {
     private readonly stripeAdapter: StripeAdapter,
     private readonly subscriptionService: SubscriptionService,
     private readonly databaseClient: DatabaseClient,
-    private readonly notificationClient: NotificationClient,
   ) {}
 
   async handleStripeEvent(event: Stripe.Event): Promise<void> {
@@ -68,8 +66,6 @@ export class WebhookService {
       this.toISODate(sub.current_period_start),
       this.toISODate(sub.current_period_end),
     );
-
-    await this.notificationClient.sendSubscriptionConfirmation(userId, planId);
   }
 
   private async handleSubscriptionCreated(subscription: Stripe.Subscription): Promise<void> {
@@ -125,7 +121,6 @@ export class WebhookService {
         periodStart,
         periodEnd,
       );
-      await this.notificationClient.sendSubscriptionConfirmation(userId, planId);
     } else {
       await this.databaseClient.upsertSubscription({
         userId,
@@ -146,7 +141,6 @@ export class WebhookService {
     if (!userId) return;
 
     await this.databaseClient.updateSubscriptionStatusByStripeId(subscription.id, 'canceled');
-    await this.notificationClient.sendSubscriptionCanceled(userId);
   }
 
   private async handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> {
@@ -177,7 +171,5 @@ export class WebhookService {
       currency: invoice.currency,
       status: 'failed',
     });
-
-    await this.notificationClient.sendPaymentFailed(userId);
   }
 }

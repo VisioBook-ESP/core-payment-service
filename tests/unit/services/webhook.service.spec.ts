@@ -4,10 +4,8 @@ import { WebhookService } from '../../../src/webhook/webhook.service';
 import { StripeAdapter } from '../../../src/adapters/stripe.adapter';
 import { SubscriptionService } from '../../../src/subscription/subscription.service';
 import { DatabaseClient } from '../../../src/services/database.client';
-import { NotificationClient } from '../../../src/services/notification.client';
 import { mockStripeAdapter } from '../../mocks/stripe.mock';
 import { mockDatabaseClient } from '../../mocks/database.mock';
-import { mockNotificationClient } from '../../mocks/notification.mock';
 
 describe('WebhookService', () => {
   let service: WebhookService;
@@ -24,7 +22,6 @@ describe('WebhookService', () => {
         { provide: StripeAdapter, useValue: mockStripeAdapter },
         { provide: SubscriptionService, useValue: mockSubscriptionService },
         { provide: DatabaseClient, useValue: mockDatabaseClient },
-        { provide: NotificationClient, useValue: mockNotificationClient },
       ],
     }).compile();
 
@@ -57,10 +54,6 @@ describe('WebhookService', () => {
         expect.any(String),
         expect.any(String),
       );
-      expect(mockNotificationClient.sendSubscriptionConfirmation).toHaveBeenCalledWith(
-        'user-123',
-        'premium',
-      );
     });
 
     it('should handle customer.subscription.deleted', async () => {
@@ -82,7 +75,6 @@ describe('WebhookService', () => {
         'sub_test_123',
         'canceled',
       );
-      expect(mockNotificationClient.sendSubscriptionCanceled).toHaveBeenCalledWith('user-123');
     });
 
     it('should handle invoice.paid', async () => {
@@ -137,7 +129,6 @@ describe('WebhookService', () => {
         currency: 'eur',
         status: 'failed',
       });
-      expect(mockNotificationClient.sendPaymentFailed).toHaveBeenCalledWith('user-123');
     });
 
     it('should handle checkout.session.completed without userId gracefully', async () => {
@@ -201,10 +192,6 @@ describe('WebhookService', () => {
         'premium',
         expect.any(String),
         expect.any(String),
-      );
-      expect(mockNotificationClient.sendSubscriptionConfirmation).toHaveBeenCalledWith(
-        'user-123',
-        'premium',
       );
       expect(mockDatabaseClient.upsertSubscription).not.toHaveBeenCalled();
     });

@@ -90,7 +90,7 @@
       "!src/dto/**",
       "!src/guards/authenticated-request.ts",
       "!src/services/database.client.ts",
-      "!src/services/notification.client.ts",
+
       "!src/services/user-service.client.ts",
       "!src/services/user-service.mock.ts",
       "!src/health/**"
