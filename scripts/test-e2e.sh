@@ -10,8 +10,12 @@
 #
 # Prerequis: docker, stripe CLI (stripe login fait sur le bon compte)
 # =============================================================================
+BASE_URL="http://localhost:8087"
+# BASE_URL="https://visiobook.cloud"
 
 set -euo pipefail
+
+
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -87,7 +91,7 @@ echo "  -> docker compose up (sans webhook secret pour l'instant)..."
 docker compose up -d 2>/dev/null
 
 echo "  -> Attente du service..."
-wait_for_health "http://localhost:8087/api/v1/health"
+wait_for_health "${BASE_URL}/api/v1/health"
 echo "  Service pret."
 
 # =============================================================================
@@ -99,7 +103,7 @@ if [ "$RUN_PAYMENT" = true ]; then
   STRIPE_LOG=$(mktemp)
 
   stripe listen \
-    --forward-to localhost:8087/api/v1/webhooks/stripe \
+    --forward-to "${BASE_URL}/api/v1/webhooks/stripe" \
     --api-key "$STRIPE_SK" \
     > "$STRIPE_LOG" 2>&1 &
   STRIPE_LISTEN_PID=$!
@@ -132,7 +136,7 @@ if [ "$RUN_PAYMENT" = true ]; then
   STRIPE_WEBHOOK_SECRET="$WHSEC" docker compose up -d app 2>/dev/null
 
   echo "  -> Attente du service..."
-  wait_for_health "http://localhost:8087/api/v1/health"
+  wait_for_health "${BASE_URL}/api/v1/health"
   echo "  Service pret avec le bon webhook secret."
 fi
 
