@@ -15,7 +15,6 @@ services:
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-whsec_placeholder}
       - DATABASE_URL=postgresql://payment_app:localdevpass@postgres:5432/payment
       - USER_SERVICE_URL=http://host.docker.internal:8081
-      - NOTIFICATION_SERVICE_URL=http://host.docker.internal:8088
       - INTERNAL_API_KEY=${INTERNAL_API_KEY:-dev-internal-key}
       - USER_SERVICE_MOCK=${USER_SERVICE_MOCK:-false}
       - LOG_LEVEL=debug

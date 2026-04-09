@@ -52,7 +52,6 @@ graph TB
     subgraph "External Services"
         STRIPE_API[Stripe API]
         USER[core-user-service :8081]
-        NOTIF[core-notification-service :8088]
     end
 
     MOBILE --> GW
@@ -75,7 +74,6 @@ graph TB
     SUB_SVC --> DB
     SUB_SVC --> USER
     QUOTA_SVC --> DB
-    PAY_SVC --> NOTIF
 ```
 
 ## Table des matieres
@@ -212,8 +210,6 @@ sequenceDiagram
     participant STRIPE as Stripe API
     participant DB as Database
     participant US as core-user-service
-    participant NS as Notification Service
-
     C->>PS: POST /subscriptions/checkout<br/>{ planId: "premium" }<br/>x-user-id: <userId>
 
     Note over C,PS: userId transmis par la Gateway via header x-user-id
@@ -230,7 +226,6 @@ sequenceDiagram
 
     PS->>DB: Create subscription record
     PS->>US: PATCH /users/:id/tier<br/>{ tier: "premium" }
-    PS->>NS: Send confirmation email
 
     PS-->>STRIPE: 200 OK
 
@@ -336,7 +331,6 @@ STRIPE_WEBHOOK_SECRET=whsec_xxxxx
 
 # Services internes
 USER_SERVICE_URL=http://core-user-service:8081
-NOTIFICATION_SERVICE_URL=http://core-notification-service:8088
 
 # Auth
 # Pas de JWT_SECRET : la Gateway valide le token en amont et transmet
@@ -416,7 +410,7 @@ sequenceDiagram
     Note over F: L'utilisateur saisit sa carte / Apple Pay / Google Pay
 
     STRIPE->>PS: POST /webhooks/stripe<br/>customer.subscription.updated (status: active)
-    PS->>PS: activateSubscription() — DB + tier + quota + notification
+    PS->>PS: activateSubscription() — DB + tier + quota
 
     F->>PS: GET /subscriptions/current → status: "active"
 ```
@@ -555,7 +549,6 @@ Le `UserIdGuard` orchestre le flux d'authentification pour toutes les routes pro
 | Stripe API | SDK | Traitement paiements |
 | core-user-service | `GET /api/v1/users/:id` | Recuperation infos utilisateur |
 | core-user-service | `PATCH /api/v1/users/:id/tier` | Mise a jour tier utilisateur |
-| core-notification-service | `POST /api/v1/email/send` | Emails confirmation |
 | PostgreSQL (local) | TypeORM | Stockage subscriptions, quotas, transactions |
 
 ### Strategie de mock (developpement sans core-user-service)
@@ -636,8 +629,7 @@ tests/
 └── mocks/
     ├── stripe.mock.ts
     ├── database.mock.ts
-    ├── user-service.mock.ts
-    └── notification.mock.ts
+    └── user-service.mock.ts
 ```
 
 ### Lancer un fichier de test spécifique
