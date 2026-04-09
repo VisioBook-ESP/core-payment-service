@@ -1,17 +1,15 @@
 import { Module } from '@nestjs/common';
-import { HttpModule } from '@nestjs/axios';
 import { SubscriptionController } from './subscription.controller';
 import { SubscriptionService } from './subscription.service';
 import { StripeAdapter } from '../adapters/stripe.adapter';
-import { DatabaseClient } from '../services/database.client';
+import { DatabaseModule } from '../database/database.module';
 
 @Module({
-  imports: [HttpModule],
+  imports: [DatabaseModule],
   controllers: [SubscriptionController],
   providers: [
     SubscriptionService,
     StripeAdapter,
-    DatabaseClient,
   ],
   exports: [SubscriptionService],
 })

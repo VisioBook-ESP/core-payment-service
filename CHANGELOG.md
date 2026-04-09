@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-04-03
+
+### Changed
+- **Architecture base de donnees** : remplacement de l'acces HTTP via `core-database-service` par une connexion **PostgreSQL directe** avec TypeORM — chaque microservice possede desormais sa propre base de donnees
+  - `DatabaseClient` reecrit : les 10 methodes utilisent des TypeORM repositories au lieu d'appels HTTP `POST /api/v1/query`
+  - Meme interface publique conservee — `SubscriptionService`, `QuotaService`, `WebhookService` inchanges
+- **Entities** : `SubscriptionEntity`, `QuotaEntity`, `TransactionEntity` converties d'interfaces TypeScript en classes `@Entity()` decorees TypeORM
+  - Colonnes snake_case en DB via `SnakeNamingStrategy`, proprietes camelCase en TypeScript
+- **Modules** : creation de `DatabaseModule` partage (fournit `DatabaseClient` + TypeORM repositories) — remplace les `providers: [DatabaseClient]` + `imports: [HttpModule]` dans chaque feature module
+  - `SubscriptionModule` et `QuotaModule` n'importent plus `HttpModule`
+  - `WebhookModule` garde `HttpModule` (utilise par `NotificationClient`)
+- **`src/app.module.ts`** : ajout de `TypeOrmModule.forRootAsync()` lisant `DATABASE_URL`
+
+### Added
+- **`src/config/typeorm.config.ts`** : configuration TypeORM async (PostgreSQL, SnakeNamingStrategy, synchronize: false)
+- **`src/config/data-source.ts`** : DataSource standalone pour les migrations CLI
+- **`src/database/database.module.ts`** : module NestJS partage exportant `DatabaseClient`
+- **`src/migrations/1743638400000-InitPaymentTables.ts`** : migration initiale creant les tables `subscriptions`, `quotas`, `transactions` avec index
+- **docker-compose.yml** : service `postgres` (postgres:16-alpine) avec healthcheck et volume persistant
+- **package.json** : scripts `migration:run`, `migration:revert`, `migration:generate`
+- **Dependances** : `@nestjs/typeorm`, `typeorm`, `pg`, `typeorm-naming-strategies`
+
+### Removed
+- Dependance sur `core-database-service` (plus d'appels HTTP pour l'acces DB)
+- Variable d'environnement `DATABASE_SERVICE_URL` remplacee par `DATABASE_URL`
+
 ## [0.5.0] - 2026-04-02
 
 ### Changed
@@ -237,7 +263,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Clients inter-services (DatabaseClient, UserServiceClient, NotificationClient)
 
 - Docker multi-stage Dockerfile + Dockerfile.dev
-- docker-compose.yml avec Redis
+- docker-compose.yml
 - Tests unitaires (SubscriptionService, QuotaService, WebhookService, controllers)
 - Mocks complets (Stripe, Database, UserService, Notification)
 

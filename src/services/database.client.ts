@@ -1,32 +1,31 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { SubscriptionEntity, SubscriptionStatus } from '../entities/subscription.entity';
 import { QuotaEntity } from '../entities/quota.entity';
+import { TransactionEntity, TransactionStatus } from '../entities/transaction.entity';
+
+const QUOTA_FIELD_MAP: Record<string, keyof QuotaEntity> = {
+  generations_used: 'generationsUsed',
+  storage_used: 'storageUsed',
+};
 
 @Injectable()
 export class DatabaseClient {
   private readonly logger = new Logger(DatabaseClient.name);
-  private readonly baseUrl: string;
 
   constructor(
-    private readonly httpService: HttpService,
-    private readonly configService: ConfigService,
-  ) {
-    this.baseUrl = this.configService.getOrThrow<string>('DATABASE_SERVICE_URL');
-  }
+    @InjectRepository(SubscriptionEntity)
+    private readonly subscriptionRepo: Repository<SubscriptionEntity>,
+    @InjectRepository(QuotaEntity)
+    private readonly quotaRepo: Repository<QuotaEntity>,
+    @InjectRepository(TransactionEntity)
+    private readonly transactionRepo: Repository<TransactionEntity>,
+  ) {}
 
   async getSubscriptionByUserId(userId: string): Promise<SubscriptionEntity | null> {
     try {
-      const { data } = await firstValueFrom(
-        this.httpService.post(`${this.baseUrl}/api/v1/query`, {
-          table: 'subscriptions',
-          operation: 'findOne',
-          where: { user_id: userId },
-        }),
-      );
-      return data.result || null;
+      return await this.subscriptionRepo.findOne({ where: { userId } });
     } catch (error) {
       this.logger.warn(`Failed to get subscription for user ${userId}: ${error}`);
       return null;
@@ -42,63 +41,31 @@ export class DatabaseClient {
     currentPeriodStart: string;
     currentPeriodEnd: string;
   }): Promise<SubscriptionEntity> {
-    const { data } = await firstValueFrom(
-      this.httpService.post(`${this.baseUrl}/api/v1/query`, {
-        table: 'subscriptions',
-        operation: 'upsert',
-        where: { user_id: params.userId },
-        data: {
-          user_id: params.userId,
-          stripe_customer_id: params.stripeCustomerId,
-          stripe_subscription_id: params.stripeSubscriptionId,
-          plan_id: params.planId,
-          status: params.status,
-          current_period_start: params.currentPeriodStart,
-          current_period_end: params.currentPeriodEnd,
-        },
-      }),
-    );
-    return data.result;
+    const existing = await this.subscriptionRepo.findOne({ where: { userId: params.userId } });
+    if (existing) {
+      Object.assign(existing, params);
+      return this.subscriptionRepo.save(existing);
+    }
+    return this.subscriptionRepo.save(this.subscriptionRepo.create(params));
   }
 
   async updateSubscriptionStatus(
     subscriptionId: string,
     status: SubscriptionStatus,
   ): Promise<void> {
-    await firstValueFrom(
-      this.httpService.post(`${this.baseUrl}/api/v1/query`, {
-        table: 'subscriptions',
-        operation: 'update',
-        where: { id: subscriptionId },
-        data: { status },
-      }),
-    );
+    await this.subscriptionRepo.update({ id: subscriptionId }, { status });
   }
 
   async updateSubscriptionStatusByStripeId(
     stripeSubscriptionId: string,
     status: SubscriptionStatus,
   ): Promise<void> {
-    await firstValueFrom(
-      this.httpService.post(`${this.baseUrl}/api/v1/query`, {
-        table: 'subscriptions',
-        operation: 'update',
-        where: { stripe_subscription_id: stripeSubscriptionId },
-        data: { status },
-      }),
-    );
+    await this.subscriptionRepo.update({ stripeSubscriptionId }, { status });
   }
 
   async getQuotaByUserId(userId: string): Promise<QuotaEntity | null> {
     try {
-      const { data } = await firstValueFrom(
-        this.httpService.post(`${this.baseUrl}/api/v1/query`, {
-          table: 'quotas',
-          operation: 'findOne',
-          where: { user_id: userId },
-        }),
-      );
-      return data.result || null;
+      return await this.quotaRepo.findOne({ where: { userId } });
     } catch (error) {
       this.logger.warn(`Failed to get quota for user ${userId}: ${error}`);
       return null;
@@ -111,20 +78,21 @@ export class DatabaseClient {
     generationsLimit: number;
     storageLimit: number;
   }): Promise<QuotaEntity> {
-    const { data } = await firstValueFrom(
-      this.httpService.post(`${this.baseUrl}/api/v1/query`, {
-        table: 'quotas',
-        operation: 'upsert',
-        where: { user_id: params.userId },
-        data: {
-          user_id: params.userId,
-          plan_id: params.planId,
-          generations_limit: params.generationsLimit,
-          storage_limit: params.storageLimit,
-        },
+    const existing = await this.quotaRepo.findOne({ where: { userId: params.userId } });
+    if (existing) {
+      existing.planId = params.planId;
+      existing.generationsLimit = params.generationsLimit;
+      existing.storageLimit = params.storageLimit;
+      return this.quotaRepo.save(existing);
+    }
+    return this.quotaRepo.save(
+      this.quotaRepo.create({
+        ...params,
+        generationsUsed: 0,
+        storageUsed: 0,
+        resetDate: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toISOString(),
       }),
     );
-    return data.result;
   }
 
   async updateQuotaUsage(
@@ -132,36 +100,19 @@ export class DatabaseClient {
     field: 'generations_used' | 'storage_used',
     increment: number,
   ): Promise<QuotaEntity> {
-    const { data } = await firstValueFrom(
-      this.httpService.post(`${this.baseUrl}/api/v1/query`, {
-        table: 'quotas',
-        operation: 'increment',
-        where: { user_id: userId },
-        data: { [field]: increment },
-      }),
-    );
-    return data.result;
+    const entityField = QUOTA_FIELD_MAP[field] ?? field;
+    await this.quotaRepo.increment({ userId }, entityField, increment);
+    return (await this.quotaRepo.findOne({ where: { userId } }))!;
   }
 
   async updateSubscriptionPlan(subscriptionId: string, planId: string): Promise<void> {
-    await firstValueFrom(
-      this.httpService.post(`${this.baseUrl}/api/v1/query`, {
-        table: 'subscriptions',
-        operation: 'update',
-        where: { id: subscriptionId },
-        data: { plan_id: planId },
-      }),
-    );
+    await this.subscriptionRepo.update({ id: subscriptionId }, { planId });
   }
 
   async resetQuotaUsage(userId: string, resetDate: string): Promise<void> {
-    await firstValueFrom(
-      this.httpService.post(`${this.baseUrl}/api/v1/query`, {
-        table: 'quotas',
-        operation: 'update',
-        where: { user_id: userId },
-        data: { generations_used: 0, storage_used: 0, reset_date: resetDate },
-      }),
+    await this.quotaRepo.update(
+      { userId },
+      { generationsUsed: 0, storageUsed: 0, resetDate },
     );
   }
 
@@ -170,20 +121,8 @@ export class DatabaseClient {
     stripePaymentIntentId: string;
     amount: number;
     currency: string;
-    status: string;
+    status: TransactionStatus;
   }): Promise<void> {
-    await firstValueFrom(
-      this.httpService.post(`${this.baseUrl}/api/v1/query`, {
-        table: 'transactions',
-        operation: 'create',
-        data: {
-          user_id: params.userId,
-          stripe_payment_intent_id: params.stripePaymentIntentId,
-          amount: params.amount,
-          currency: params.currency,
-          status: params.status,
-        },
-      }),
-    );
+    await this.transactionRepo.save(this.transactionRepo.create(params));
   }
 }

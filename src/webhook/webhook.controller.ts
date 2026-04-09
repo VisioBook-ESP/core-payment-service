@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Logger,
   BadRequestException,
+  RawBodyRequest,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Request } from 'express';
@@ -27,7 +28,7 @@ export class WebhookController {
   @ApiOperation({ summary: 'Webhook Stripe' })
   @ApiResponse({ status: 200, description: 'Event processed' })
   @ApiResponse({ status: 400, description: 'Invalid signature' })
-  async handleStripeWebhook(@Req() req: Request): Promise<{ received: boolean }> {
+  async handleStripeWebhook(@Req() req: RawBodyRequest<Request>): Promise<{ received: boolean }> {
     const signature = req.headers['stripe-signature'] as string;
 
     if (!signature) {
@@ -36,7 +37,7 @@ export class WebhookController {
 
     let event;
     try {
-      event = this.stripeAdapter.verifyWebhookSignature(req.body as Buffer, signature);
+      event = this.stripeAdapter.verifyWebhookSignature(req.rawBody as Buffer, signature);
     } catch (error) {
       this.logger.error(`Stripe signature verification failed: ${error}`);
       throw new BadRequestException('Webhook signature verification failed');

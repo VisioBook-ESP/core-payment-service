@@ -65,8 +65,8 @@ export class WebhookService {
       customerId,
       subscriptionId,
       planId,
-      new Date(sub.current_period_start * 1000).toISOString(),
-      new Date(sub.current_period_end * 1000).toISOString(),
+      this.toISODate(sub.current_period_start),
+      this.toISODate(sub.current_period_end),
     );
 
     await this.notificationClient.sendSubscriptionConfirmation(userId, planId);
@@ -76,8 +76,21 @@ export class WebhookService {
     this.logger.log(`Subscription created: ${subscription.id}, status: ${subscription.status}`);
   }
 
+  private toISODate(value: unknown): string {
+    if (typeof value === 'number') {
+      return new Date(value * 1000).toISOString();
+    }
+    if (typeof value === 'string') {
+      return new Date(value).toISOString();
+    }
+    return new Date().toISOString();
+  }
+
   private async handleSubscriptionUpdated(subscription: Stripe.Subscription): Promise<void> {
     this.logger.log(`Subscription updated: ${subscription.id}, status: ${subscription.status}`);
+    this.logger.debug(
+      `Subscription period: start=${subscription.current_period_start}, end=${subscription.current_period_end}, type=${typeof subscription.current_period_start}`,
+    );
 
     const userId = subscription.metadata?.userId;
     if (!userId) return;
@@ -99,6 +112,9 @@ export class WebhookService {
     };
     const internalStatus = statusMap[subscription.status] ?? 'past_due';
 
+    const periodStart = this.toISODate(subscription.current_period_start);
+    const periodEnd = this.toISODate(subscription.current_period_end);
+
     if (internalStatus === 'active') {
       // Covers Payment Sheet flow (incomplete → active) and handles upgrade/downgrade idempotently
       await this.subscriptionService.activateSubscription(
@@ -106,8 +122,8 @@ export class WebhookService {
         customerId,
         subscription.id,
         planId,
-        new Date(subscription.current_period_start * 1000).toISOString(),
-        new Date(subscription.current_period_end * 1000).toISOString(),
+        periodStart,
+        periodEnd,
       );
       await this.notificationClient.sendSubscriptionConfirmation(userId, planId);
     } else {
@@ -117,8 +133,8 @@ export class WebhookService {
         stripeSubscriptionId: subscription.id,
         planId,
         status: internalStatus,
-        currentPeriodStart: new Date(subscription.current_period_start * 1000).toISOString(),
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
+        currentPeriodStart: periodStart,
+        currentPeriodEnd: periodEnd,
       });
     }
   }

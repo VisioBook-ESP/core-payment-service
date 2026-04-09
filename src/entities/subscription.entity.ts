@@ -1,14 +1,42 @@
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+
 export type SubscriptionStatus = 'active' | 'canceled' | 'past_due' | 'trialing';
 
-export interface SubscriptionEntity {
-  id: string;
-  userId: string;
-  stripeCustomerId: string;
-  stripeSubscriptionId: string;
-  planId: string;
-  status: SubscriptionStatus;
-  currentPeriodStart: string;
-  currentPeriodEnd: string;
-  createdAt: string;
-  updatedAt: string;
+@Entity('subscriptions')
+export class SubscriptionEntity {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ unique: true })
+  userId!: string;
+
+  @Column()
+  stripeCustomerId!: string;
+
+  @Column()
+  stripeSubscriptionId!: string;
+
+  @Column()
+  planId!: string;
+
+  @Column({ type: 'varchar' })
+  status!: SubscriptionStatus;
+
+  @Column({ type: 'timestamptz' })
+  currentPeriodStart!: string;
+
+  @Column({ type: 'timestamptz' })
+  currentPeriodEnd!: string;
+
+  @CreateDateColumn({ type: 'timestamptz' })
+  createdAt!: string;
+
+  @UpdateDateColumn({ type: 'timestamptz' })
+  updatedAt!: string;
 }

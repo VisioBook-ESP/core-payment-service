@@ -90,11 +90,9 @@ env:
   NODE_ENV: production
   LOG_LEVEL: info
   SWAGGER_ENABLED: "false"
-  DATABASE_SERVICE_URL: http://core-database-service.visiobook-namespace.svc.cluster.local:8095
+  DATABASE_URL: "postgresql://payement_app:CrudSecurePass123!@postgres-crud-rw.visiobook-namespace.svc.cluster.local:5432/payement"
   USER_SERVICE_URL: http://core-user-service.visiobook-namespace.svc.cluster.local:8081
   NOTIFICATION_SERVICE_URL: http://core-notification-service.visiobook-namespace.svc.cluster.local:8088
-  REDIS_HOST: redis.visiobook-namespace.svc.cluster.local
-  REDIS_PORT: "6379"
   # Stripe
   STRIPE_SECRET_KEY: "sk_test_51Sq9o8HhqOObOnmXjmlvI1W2wwaOdIM1hpKQsEGQlL7YEVOLhMVJa5f7WwfWreDUsMalkNdjhQncMQF7QoTabrhW00JkLzdyBf"
   STRIPE_PUBLISHABLE_KEY: "pk_test_51Sq9o8HhqOObOnmXTX6YSB1Eza5ovIBCspFSgvKU1lZGdioaElSITmlppmPBlKjxfKCcZYfHzzgPZV3Q5t5RTl2c00QW322I8C"
