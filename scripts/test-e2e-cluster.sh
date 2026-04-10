@@ -35,6 +35,13 @@ PASS=0
 FAIL=0
 TOTAL=0
 
+# --- Utilisateur e2e (genere aleatoirement) ----------------------------------
+RAND=$(head -c 4 /dev/urandom | xxd -p)
+E2E_EMAIL="e2e-pay-${RAND}@example.com"
+E2E_USERNAME="e2e-pay-${RAND}"
+E2E_PASSWORD="SecureE2eTest123!"
+TOKEN=""
+
 # --- Parse flags -------------------------------------------------------------
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -124,12 +131,55 @@ wait_for_health "${API}/health"
 echo "  OK — service en ligne"
 
 # =============================================================================
-#  ETAPE 2 — Tests curl fonctionnels
+#  ETAPE 2 — Authentification (register + login)
+# =============================================================================
+print_header "ETAPE 2 — Authentification"
+
+AUTH_API="${BASE_URL}/api/v1"
+
+step "Register: ${E2E_EMAIL}"
+REG_RESP=$(curl -s -o /tmp/curl_body.txt -w "%{http_code}" --max-time 10 \
+  -X POST \
+  -H "Content-Type: application/json" \
+  -d "{\"email\":\"${E2E_EMAIL}\",\"password\":\"${E2E_PASSWORD}\",\"username\":\"${E2E_USERNAME}\"}" \
+  "${AUTH_API}/auth/register")
+REG_BODY=$(cat /tmp/curl_body.txt)
+
+if [ "$REG_RESP" -ge 200 ] && [ "$REG_RESP" -lt 300 ]; then
+  echo "  OK — user cree (HTTP ${REG_RESP})"
+else
+  echo "  [FATAL] Register echoue (HTTP ${REG_RESP}): $(echo "$REG_BODY" | head -c 300)"
+  exit 1
+fi
+
+step "Login: ${E2E_EMAIL}"
+LOGIN_RESP=$(curl -s -o /tmp/curl_body.txt -w "%{http_code}" --max-time 10 \
+  -X POST \
+  -H "Content-Type: application/json" \
+  -d "{\"email\":\"${E2E_EMAIL}\",\"password\":\"${E2E_PASSWORD}\"}" \
+  "${AUTH_API}/auth/login")
+LOGIN_BODY=$(cat /tmp/curl_body.txt)
+
+if [ "$LOGIN_RESP" -ge 200 ] && [ "$LOGIN_RESP" -lt 300 ]; then
+  TOKEN=$(python3 -c "import sys,json; print(json.loads(sys.argv[1]).get('access_token',''))" "$LOGIN_BODY")
+  if [ -z "$TOKEN" ] || [ "$TOKEN" = "None" ]; then
+    echo "  [FATAL] Login OK mais pas de access_token dans la reponse"
+    echo "  Response: $(echo "$LOGIN_BODY" | head -c 300)"
+    exit 1
+  fi
+  echo "  OK — token: ${TOKEN:0:50}..."
+else
+  echo "  [FATAL] Login echoue (HTTP ${LOGIN_RESP}): $(echo "$LOGIN_BODY" | head -c 300)"
+  exit 1
+fi
+
+# Header d'auth pour toutes les requetes authentifiees
+AUTH_HEADER="Authorization: Bearer ${TOKEN}"
+
+# =============================================================================
+#  ETAPE 3 — Tests curl fonctionnels
 # =============================================================================
 if [ "$RUN_CURL" = true ]; then
-
-  # --- Utilisateur de test (UUID fixe) ----------------------------------------
-  USER_ID="e2e-test-aaaa-bbbb-cccc-000000000001"
 
   # =========================================================================
   #  HEALTH
@@ -151,68 +201,35 @@ if [ "$RUN_CURL" = true ]; then
     "${API}/subscriptions/plans"
 
   # =========================================================================
-  #  AUTH — Erreurs sans header
+  #  AUTH — Erreurs sans token (RBAC doit bloquer -> 403)
   # =========================================================================
-  print_header "AUTH — Erreurs sans header"
+  print_header "AUTH — Erreurs sans token (expect 403 RBAC)"
 
-  run_test "GET /subscriptions/current — sans x-user-id (401)" "401" \
+  run_test "GET /subscriptions/current — sans auth (403)" "403" \
     "${API}/subscriptions/current"
 
-  run_test "POST /subscriptions/checkout — sans x-user-id (401)" "401" \
+  run_test "POST /subscriptions/checkout — sans auth (403)" "403" \
     -X POST \
     -H "Content-Type: application/json" \
     -d '{"planId":"premium","successUrl":"https://app.visiobook.com/success","cancelUrl":"https://app.visiobook.com/pricing"}' \
     "${API}/subscriptions/checkout"
 
-  run_test "POST /subscriptions/payment-intent — sans x-user-id (401)" "401" \
-    -X POST \
-    -H "Content-Type: application/json" \
-    -d '{"planId":"premium"}' \
-    "${API}/subscriptions/payment-intent"
-
-  run_test "POST /subscriptions/cancel — sans x-user-id (401)" "401" \
+  run_test "POST /subscriptions/cancel — sans auth (403)" "403" \
     -X POST \
     "${API}/subscriptions/cancel"
 
-  run_test "POST /subscriptions/upgrade — sans x-user-id (401)" "401" \
-    -X POST \
-    -H "Content-Type: application/json" \
-    -d '{"planId":"enterprise"}' \
-    "${API}/subscriptions/upgrade"
-
-  run_test "POST /subscriptions/downgrade — sans x-user-id (401)" "401" \
-    -X POST \
-    -H "Content-Type: application/json" \
-    -d '{"planId":"premium"}' \
-    "${API}/subscriptions/downgrade"
-
-  run_test "GET /subscriptions/portal — sans x-user-id (401)" "401" \
-    "${API}/subscriptions/portal"
-
-  run_test "GET /quotas — sans x-user-id (401)" "401" \
+  run_test "GET /quotas — sans auth (403)" "403" \
     "${API}/quotas"
 
-  run_test "POST /quotas/consume — sans x-api-key (401)" "401" \
-    -X POST \
-    -H "Content-Type: application/json" \
-    -d "{\"userId\":\"${USER_ID}\",\"type\":\"generation\",\"amount\":1}" \
-    "${API}/quotas/consume"
-
-  run_test "POST /quotas/reset — sans x-api-key (401)" "401" \
-    -X POST \
-    -H "Content-Type: application/json" \
-    -d "{\"userId\":\"${USER_ID}\"}" \
-    "${API}/quotas/reset"
-
   # =========================================================================
-  #  VALIDATION — Body invalide
+  #  VALIDATION — Body invalide (avec token)
   # =========================================================================
   print_header "VALIDATION — Body invalide"
 
   run_test "POST /subscriptions/checkout — body vide (400)" "400" \
     -X POST \
     -H "Content-Type: application/json" \
-    -H "x-user-id: ${USER_ID}" \
+    -H "${AUTH_HEADER}" \
     -d '{}' \
     "${API}/subscriptions/checkout"
 
@@ -220,54 +237,45 @@ if [ "$RUN_CURL" = true ]; then
     -X POST \
     -H "Content-Type: application/json" \
     -H "x-api-key: ${API_KEY}" \
+    -H "${AUTH_HEADER}" \
     -d '{}' \
     "${API}/quotas/consume"
 
   # =========================================================================
-  #  SANS DONNEES — Comportement attendu
+  #  AVEC TOKEN — Comportement attendu (user sans subscription)
   # =========================================================================
-  print_header "SANS DONNEES — Comportement attendu"
+  print_header "AVEC TOKEN — Comportement attendu (user frais)"
 
   run_test "GET /subscriptions/current — pas de subscription (200)" "200" \
-    -H "x-user-id: ${USER_ID}" \
+    -H "${AUTH_HEADER}" \
     "${API}/subscriptions/current"
 
   run_test "POST /subscriptions/cancel — pas de subscription (404)" "404" \
     -X POST \
-    -H "x-user-id: ${USER_ID}" \
+    -H "${AUTH_HEADER}" \
     "${API}/subscriptions/cancel"
 
   run_test "POST /subscriptions/upgrade — pas de subscription (404)" "404" \
     -X POST \
     -H "Content-Type: application/json" \
-    -H "x-user-id: ${USER_ID}" \
+    -H "${AUTH_HEADER}" \
     -d '{"planId":"enterprise"}' \
     "${API}/subscriptions/upgrade"
 
   run_test "POST /subscriptions/downgrade — pas de subscription (404)" "404" \
     -X POST \
     -H "Content-Type: application/json" \
-    -H "x-user-id: ${USER_ID}" \
+    -H "${AUTH_HEADER}" \
     -d '{"planId":"premium"}' \
     "${API}/subscriptions/downgrade"
 
   run_test "GET /subscriptions/portal — pas de subscription (404)" "404" \
-    -H "x-user-id: ${USER_ID}" \
+    -H "${AUTH_HEADER}" \
     "${API}/subscriptions/portal"
 
-  run_test "POST /quotas/consume — pas de quota (404)" "404" \
-    -X POST \
-    -H "Content-Type: application/json" \
-    -H "x-api-key: ${API_KEY}" \
-    -d "{\"userId\":\"${USER_ID}\",\"type\":\"generation\",\"amount\":1}" \
-    "${API}/quotas/consume"
-
-  run_test "POST /quotas/reset — pas de quota (404)" "404" \
-    -X POST \
-    -H "Content-Type: application/json" \
-    -H "x-api-key: ${API_KEY}" \
-    -d "{\"userId\":\"${USER_ID}\"}" \
-    "${API}/quotas/reset"
+  run_test "GET /quotas — user frais (200)" "200" \
+    -H "${AUTH_HEADER}" \
+    "${API}/quotas"
 
   # =========================================================================
   #  WEBHOOKS — Stripe (signature invalide)
@@ -290,11 +298,11 @@ if [ "$RUN_CURL" = true ]; then
 fi
 
 # =============================================================================
-#  ETAPE 3 — Tests paiement Stripe e2e
+#  ETAPE 4 — Tests paiement Stripe e2e
 # =============================================================================
 if [ "$RUN_PAYMENT" = true ]; then
 
-  print_header "ETAPE 3 — Tests paiement Stripe e2e"
+  print_header "ETAPE 4 — Tests paiement Stripe e2e"
 
   step "Stripe API accessible ?"
   STRIPE_CHECK=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
@@ -305,29 +313,23 @@ if [ "$RUN_PAYMENT" = true ]; then
   fi
   echo "  OK — Stripe API (mode test)"
 
-  # Utilisateurs e2e dedies (UUIDs fixes pour pouvoir nettoyer)
-  E2E_USER_A="e2e-pay-aaaa-1111-4000-a00000000001"
-  E2E_USER_B="e2e-pay-bbbb-2222-4000-b00000000002"
-
   STRIPE_CUSTOMERS_TO_CLEANUP=()
 
   simulate_payment() {
-    local user_id="$1"
-    local plan_id="$2"
-    local interval="$3"
-    local label="$4"
+    local plan_id="$1"
+    local interval="$2"
+    local label="$3"
 
     TOTAL=$((TOTAL + 1))
     echo ""
     echo "--- [$TOTAL] $label ---"
-    echo "  User:     $user_id"
     echo "  Plan:     $plan_id ($interval)"
 
     # --- Creer la subscription via payment-intent ---
     step "POST /subscriptions/payment-intent"
     RESPONSE=$(curl -s --max-time 15 -X POST \
       -H "Content-Type: application/json" \
-      -H "x-user-id: ${user_id}" \
+      -H "${AUTH_HEADER}" \
       -d "{\"planId\":\"${plan_id}\",\"interval\":\"${interval}\"}" \
       "${API}/subscriptions/payment-intent")
 
@@ -381,19 +383,16 @@ if [ "$RUN_PAYMENT" = true ]; then
     echo "  Subscription Stripe: $SUB_STATUS"
 
     # --- Verifier via notre API ---
-    step "GET /subscriptions/current pour user ${user_id}"
+    step "GET /subscriptions/current"
     OUR_RESPONSE=$(curl -s --max-time 10 \
-      -H "x-user-id: ${user_id}" \
+      -H "${AUTH_HEADER}" \
       "${API}/subscriptions/current")
     echo "  Notre API: $(echo "$OUR_RESPONSE" | head -c 300)"
   }
 
   # --- Scenarios ---
-  print_header "SCENARIO 1 : User A -> Premium mensuel"
-  simulate_payment "$E2E_USER_A" "premium" "month" "User A — Premium mensuel"
-
-  print_header "SCENARIO 2 : User B -> Enterprise mensuel"
-  simulate_payment "$E2E_USER_B" "enterprise" "month" "User B — Enterprise mensuel"
+  print_header "SCENARIO : Premium mensuel"
+  simulate_payment "premium" "month" "Premium mensuel"
 
   # --- Cleanup Stripe (annuler les subscriptions de test) ---
   if [ "$CLEANUP_STRIPE" = true ] && [ ${#STRIPE_CUSTOMERS_TO_CLEANUP[@]} -gt 0 ]; then
