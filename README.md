@@ -645,6 +645,38 @@ npm test -- --testPathPattern="stripe.adapter|user-id"
 npm run test:cov
 ```
 
+### Tests e2e cluster (curl)
+
+Script bash qui teste le parcours utilisateur complet du service de paiement deploye dans le cluster K8s.
+
+```bash
+# Parcours complet (securite, validation, checkout, webhooks)
+./scripts/test-e2e-cluster.sh
+
+# URL custom
+./scripts/test-e2e-cluster.sh --url http://localhost:8087
+
+# Inclure paiement Stripe e2e + quotas post-activation
+./scripts/test-e2e-cluster.sh --payment
+
+# Tous les tests
+./scripts/test-e2e-cluster.sh --all
+```
+
+**Parcours teste :**
+
+| Etape | Description | Tests |
+|-------|-------------|-------|
+| 1. Securite | Toutes les routes bloquees sans token (Gateway RBAC → 403) | 12 |
+| 2. Decouverte | Consulter les plans disponibles | 1 |
+| 3. Validation | Body vide / donnees invalides rejetees (→ 400) | 6 |
+| 4. Nouvel utilisateur | Pas de subscription, quotas par defaut, operations impossibles (→ 404) | 6 |
+| 5. Souscription | Checkout Stripe : premium mensuel/annuel, enterprise, plan invalide/free | 5 |
+| 6. Quotas sans sub | consume/reset → 404 (pas de record en DB) | 2 |
+| 7. Webhooks | Signature Stripe absente/invalide (→ 400) | 2 |
+| 8. Paiement (`--payment`) | payment-intent → confirmation carte test → webhook → subscription active | 1 |
+| 9. Post-paiement (`--payment`) | consume generation/storage, reset, verifications | 6 |
+
 ## Deploiement
 
 ### Docker

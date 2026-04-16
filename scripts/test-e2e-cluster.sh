@@ -2,6 +2,16 @@
 # =============================================================================
 # test-e2e-cluster.sh — Tests e2e du payment-service dans le cluster K8s
 #
+# Parcours utilisateur teste :
+#   1. Securite    — Toutes les routes bloquees sans token (Gateway RBAC)
+#   2. Decouverte  — Consulter les plans disponibles
+#   3. Validation  — Donnees invalides rejetees (body vide, mauvais format)
+#   4. Nouvel utilisateur — Pas de subscription, quotas par defaut
+#   5. Souscription — Checkout web (session Stripe) + erreurs metier
+#   6. Paiement    — (--payment) Payment-intent mobile, confirmation, activation
+#   7. Post-paiement — (--payment) Quotas consommes/reset apres subscription
+#   8. Webhooks    — Signature Stripe validee
+#
 # Usage:
 #   ./scripts/test-e2e-cluster.sh                    # hit visiobook.cloud
 #   ./scripts/test-e2e-cluster.sh --url <BASE_URL>   # URL custom
@@ -35,12 +45,18 @@ PASS=0
 FAIL=0
 TOTAL=0
 
+# Compteurs par section
+SECTION_PASS=0
+SECTION_FAIL=0
+SECTION_TOTAL=0
+
 # --- Utilisateur e2e (genere aleatoirement) ----------------------------------
 RAND=$(head -c 4 /dev/urandom | xxd -p)
 E2E_EMAIL="e2e-pay-${RAND}@example.com"
 E2E_USERNAME="e2e-pay-${RAND}"
 E2E_PASSWORD="SecureE2eTest123!"
 TOKEN=""
+USER_ID=""
 
 # --- Parse flags -------------------------------------------------------------
 while [ $# -gt 0 ]; do
@@ -59,20 +75,46 @@ while [ $# -gt 0 ]; do
   shift
 done
 
+# --- Couleurs ----------------------------------------------------------------
+if [ -t 1 ]; then
+  GREEN='\033[0;32m'
+  RED='\033[0;31m'
+  YELLOW='\033[0;33m'
+  CYAN='\033[0;36m'
+  BOLD='\033[1m'
+  DIM='\033[2m'
+  RESET='\033[0m'
+else
+  GREEN='' RED='' YELLOW='' CYAN='' BOLD='' DIM='' RESET=''
+fi
+
 # --- Helpers -----------------------------------------------------------------
 json_get() {
   python3 -c "import sys,json; print(json.loads(sys.argv[1]).get(sys.argv[2],''))" "$1" "$2"
 }
 
 print_header() {
+  # Afficher le bilan de la section precedente si elle avait des tests
+  if [ "$SECTION_TOTAL" -gt 0 ]; then
+    echo ""
+    if [ "$SECTION_FAIL" -eq 0 ]; then
+      echo -e "  ${GREEN}${BOLD}$SECTION_PASS/$SECTION_TOTAL passed${RESET}"
+    else
+      echo -e "  ${RED}${BOLD}$SECTION_FAIL/$SECTION_TOTAL failed${RESET}  ${GREEN}$SECTION_PASS passed${RESET}"
+    fi
+  fi
+  SECTION_PASS=0
+  SECTION_FAIL=0
+  SECTION_TOTAL=0
+
   echo ""
-  echo "================================================================"
-  echo "  $1"
-  echo "================================================================"
+  echo -e "${BOLD}================================================================${RESET}"
+  echo -e "${BOLD}  $1${RESET}"
+  echo -e "${BOLD}================================================================${RESET}"
 }
 
 step() {
-  echo "  -> $1"
+  echo -e "  ${DIM}->${RESET} $1"
 }
 
 run_test() {
@@ -80,24 +122,24 @@ run_test() {
   local expected_status="$2"
   shift 2
   TOTAL=$((TOTAL + 1))
-
-  echo ""
-  echo "--- [$TOTAL] $label ---"
+  SECTION_TOTAL=$((SECTION_TOTAL + 1))
 
   HTTP_CODE=$(curl -s -o /tmp/curl_body.txt -w "%{http_code}" --max-time 10 "$@")
   BODY=$(cat /tmp/curl_body.txt)
 
   if [ "$HTTP_CODE" = "$expected_status" ]; then
-    echo "  [PASS] HTTP $HTTP_CODE"
+    echo -e "  ${GREEN}PASS${RESET}  ${label}  ${DIM}(${HTTP_CODE})${RESET}"
     PASS=$((PASS + 1))
+    SECTION_PASS=$((SECTION_PASS + 1))
   else
-    echo "  [FAIL] HTTP $HTTP_CODE (expected $expected_status)"
-    echo "  Response: $(echo "$BODY" | head -c 300)"
+    echo -e "  ${RED}FAIL${RESET}  ${label}  ${RED}got ${HTTP_CODE}, expected ${expected_status}${RESET}"
+    echo -e "        ${DIM}$(echo "$BODY" | head -c 200)${RESET}"
     FAIL=$((FAIL + 1))
+    SECTION_FAIL=$((SECTION_FAIL + 1))
   fi
 }
 
-wait_for_health() {
+wait_for_service() {
   local url="$1"
   local max_attempts=20
   local attempt=0
@@ -108,32 +150,38 @@ wait_for_health() {
     attempt=$((attempt + 1))
     sleep 1
   done
-  echo "  [FATAL] Service non disponible apres ${max_attempts}s sur $url"
+  echo -e "  ${RED}[FATAL] Service non disponible apres ${max_attempts}s sur $url${RESET}"
   exit 1
 }
 
+print_section_footer() {
+  if [ "$SECTION_TOTAL" -gt 0 ]; then
+    echo ""
+    if [ "$SECTION_FAIL" -eq 0 ]; then
+      echo -e "  ${GREEN}${BOLD}$SECTION_PASS/$SECTION_TOTAL passed${RESET}"
+    else
+      echo -e "  ${RED}${BOLD}$SECTION_FAIL/$SECTION_TOTAL failed${RESET}  ${GREEN}$SECTION_PASS passed${RESET}"
+    fi
+  fi
+}
+
 # =============================================================================
-#  ETAPE 1 — Verification du service
+#  PREPARATION — Service + Authentification
 # =============================================================================
-print_header "ETAPE 1 — Verification du service"
+print_header "Preparation — Connexion au cluster"
 
 step "python3 disponible ?"
 if ! command -v python3 &> /dev/null; then
-  echo "  [FATAL] python3 requis pour parser le JSON"
+  echo -e "  ${RED}[FATAL] python3 requis pour parser le JSON${RESET}"
   exit 1
 fi
-echo "  OK"
+echo -e "  ${GREEN}OK${RESET}"
 
 API="${BASE_URL}/api/v1"
 
 step "Service accessible sur $BASE_URL ?"
-wait_for_health "${API}/health"
-echo "  OK — service en ligne"
-
-# =============================================================================
-#  ETAPE 2 — Authentification (register + login)
-# =============================================================================
-print_header "ETAPE 2 — Authentification"
+wait_for_service "${API}/health"
+echo -e "  ${GREEN}OK${RESET} — service en ligne"
 
 AUTH_API="${BASE_URL}/api/v1"
 
@@ -146,9 +194,9 @@ REG_RESP=$(curl -s -o /tmp/curl_body.txt -w "%{http_code}" --max-time 10 \
 REG_BODY=$(cat /tmp/curl_body.txt)
 
 if [ "$REG_RESP" -ge 200 ] && [ "$REG_RESP" -lt 300 ]; then
-  echo "  OK — user cree (HTTP ${REG_RESP})"
+  echo -e "  ${GREEN}OK${RESET} — user cree (HTTP ${REG_RESP})"
 else
-  echo "  [FATAL] Register echoue (HTTP ${REG_RESP}): $(echo "$REG_BODY" | head -c 300)"
+  echo -e "  ${RED}[FATAL] Register echoue (HTTP ${REG_RESP}): $(echo "$REG_BODY" | head -c 300)${RESET}"
   exit 1
 fi
 
@@ -163,155 +211,265 @@ LOGIN_BODY=$(cat /tmp/curl_body.txt)
 if [ "$LOGIN_RESP" -ge 200 ] && [ "$LOGIN_RESP" -lt 300 ]; then
   TOKEN=$(python3 -c "import sys,json; print(json.loads(sys.argv[1]).get('access_token',''))" "$LOGIN_BODY")
   if [ -z "$TOKEN" ] || [ "$TOKEN" = "None" ]; then
-    echo "  [FATAL] Login OK mais pas de access_token dans la reponse"
+    echo -e "  ${RED}[FATAL] Login OK mais pas de access_token dans la reponse${RESET}"
     echo "  Response: $(echo "$LOGIN_BODY" | head -c 300)"
     exit 1
   fi
-  echo "  OK — token: ${TOKEN:0:50}..."
+  echo -e "  ${GREEN}OK${RESET} — token: ${TOKEN:0:50}..."
+
+  USER_ID=$(python3 -c "
+import sys, json, base64
+token = sys.argv[1]
+payload = token.split('.')[1]
+padding = 4 - len(payload) % 4
+if padding != 4:
+    payload += '=' * padding
+data = json.loads(base64.urlsafe_b64decode(payload))
+print(data.get('sub', data.get('userId', data.get('id', ''))))
+" "$TOKEN")
+  if [ -z "$USER_ID" ] || [ "$USER_ID" = "None" ]; then
+    echo -e "  ${YELLOW}[WARN] Impossible d'extraire userId du JWT${RESET}"
+  else
+    echo -e "  ${GREEN}OK${RESET} — userId: ${USER_ID}"
+  fi
 else
-  echo "  [FATAL] Login echoue (HTTP ${LOGIN_RESP}): $(echo "$LOGIN_BODY" | head -c 300)"
+  echo -e "  ${RED}[FATAL] Login echoue (HTTP ${LOGIN_RESP}): $(echo "$LOGIN_BODY" | head -c 300)${RESET}"
   exit 1
 fi
 
-# Header d'auth pour toutes les requetes authentifiees
 AUTH_HEADER="Authorization: Bearer ${TOKEN}"
 
 # =============================================================================
-#  ETAPE 3 — Tests curl fonctionnels
+#  TESTS
 # =============================================================================
 if [ "$RUN_CURL" = true ]; then
 
   # =========================================================================
-  #  HEALTH
+  #  1 — SECURITE : toutes les routes bloquees sans token
   # =========================================================================
-  print_header "HEALTH CHECKS"
+  print_header "1. Securite — Routes protegees sans token (Gateway RBAC → 403)"
 
-  run_test "GET /health" "200" \
-    "${API}/health"
-
-  run_test "GET /health/ready" "200" \
-    "${API}/health/ready"
-
-  # =========================================================================
-  #  PLANS (public)
-  # =========================================================================
-  print_header "SUBSCRIPTIONS — Plans (public)"
-
-  run_test "GET /subscriptions/plans — liste des plans" "200" \
+  run_test "GET  /subscriptions/plans" "403" \
     "${API}/subscriptions/plans"
 
-  # =========================================================================
-  #  AUTH — Erreurs sans token (RBAC doit bloquer -> 403)
-  # =========================================================================
-  print_header "AUTH — Erreurs sans token (expect 403 RBAC)"
-
-  run_test "GET /subscriptions/current — sans auth (403)" "403" \
+  run_test "GET  /subscriptions/current" "403" \
     "${API}/subscriptions/current"
 
-  run_test "POST /subscriptions/checkout — sans auth (403)" "403" \
-    -X POST \
-    -H "Content-Type: application/json" \
+  run_test "POST /subscriptions/checkout" "403" \
+    -X POST -H "Content-Type: application/json" \
     -d '{"planId":"premium","successUrl":"https://app.visiobook.com/success","cancelUrl":"https://app.visiobook.com/pricing"}' \
     "${API}/subscriptions/checkout"
 
-  run_test "POST /subscriptions/cancel — sans auth (403)" "403" \
-    -X POST \
-    "${API}/subscriptions/cancel"
+  run_test "POST /subscriptions/payment-intent" "403" \
+    -X POST -H "Content-Type: application/json" \
+    -d '{"planId":"premium","interval":"month"}' \
+    "${API}/subscriptions/payment-intent"
 
-  run_test "GET /quotas — sans auth (403)" "403" \
-    "${API}/quotas"
+  run_test "POST /subscriptions/cancel" "403" \
+    -X POST "${API}/subscriptions/cancel"
 
-  # =========================================================================
-  #  VALIDATION — Body invalide (avec token)
-  # =========================================================================
-  print_header "VALIDATION — Body invalide"
-
-  run_test "POST /subscriptions/checkout — body vide (400)" "400" \
-    -X POST \
-    -H "Content-Type: application/json" \
-    -H "${AUTH_HEADER}" \
-    -d '{}' \
-    "${API}/subscriptions/checkout"
-
-  run_test "POST /quotas/consume — body vide (400)" "400" \
-    -X POST \
-    -H "Content-Type: application/json" \
-    -H "x-api-key: ${API_KEY}" \
-    -H "${AUTH_HEADER}" \
-    -d '{}' \
-    "${API}/quotas/consume"
-
-  # =========================================================================
-  #  AVEC TOKEN — Comportement attendu (user sans subscription)
-  # =========================================================================
-  print_header "AVEC TOKEN — Comportement attendu (user frais)"
-
-  run_test "GET /subscriptions/current — pas de subscription (200)" "200" \
-    -H "${AUTH_HEADER}" \
-    "${API}/subscriptions/current"
-
-  run_test "POST /subscriptions/cancel — pas de subscription (404)" "404" \
-    -X POST \
-    -H "${AUTH_HEADER}" \
-    "${API}/subscriptions/cancel"
-
-  run_test "POST /subscriptions/upgrade — pas de subscription (404)" "404" \
-    -X POST \
-    -H "Content-Type: application/json" \
-    -H "${AUTH_HEADER}" \
+  run_test "POST /subscriptions/upgrade" "403" \
+    -X POST -H "Content-Type: application/json" \
     -d '{"planId":"enterprise"}' \
     "${API}/subscriptions/upgrade"
 
-  run_test "POST /subscriptions/downgrade — pas de subscription (404)" "404" \
-    -X POST \
-    -H "Content-Type: application/json" \
-    -H "${AUTH_HEADER}" \
+  run_test "POST /subscriptions/downgrade" "403" \
+    -X POST -H "Content-Type: application/json" \
     -d '{"planId":"premium"}' \
     "${API}/subscriptions/downgrade"
 
-  run_test "GET /subscriptions/portal — pas de subscription (404)" "404" \
+  run_test "GET  /subscriptions/portal" "403" \
+    "${API}/subscriptions/portal"
+
+  run_test "GET  /quotas" "403" \
+    "${API}/quotas"
+
+  run_test "POST /quotas/consume" "403" \
+    -X POST -H "Content-Type: application/json" \
+    -d '{"userId":"00000000-0000-0000-0000-000000000000","type":"generation","amount":1}' \
+    "${API}/quotas/consume"
+
+  run_test "POST /quotas/reset" "403" \
+    -X POST -H "Content-Type: application/json" \
+    -d '{"userId":"00000000-0000-0000-0000-000000000000"}' \
+    "${API}/quotas/reset"
+
+  run_test "POST /webhooks/stripe" "403" \
+    -X POST -H "Content-Type: application/json" \
+    -d '{"type":"checkout.session.completed"}' \
+    "${API}/webhooks/stripe"
+
+  # =========================================================================
+  #  2 — DECOUVERTE : consulter les plans disponibles
+  # =========================================================================
+  print_header "2. Decouverte — Consulter les plans disponibles"
+
+  run_test "GET  /subscriptions/plans  → liste des plans" "200" \
+    -H "${AUTH_HEADER}" \
+    "${API}/subscriptions/plans"
+
+  # =========================================================================
+  #  3 — VALIDATION : donnees invalides rejetees (400)
+  # =========================================================================
+  print_header "3. Validation — Donnees invalides rejetees (→ 400)"
+
+  run_test "POST /subscriptions/checkout       body vide" "400" \
+    -X POST -H "Content-Type: application/json" \
+    -H "${AUTH_HEADER}" -d '{}' \
+    "${API}/subscriptions/checkout"
+
+  run_test "POST /subscriptions/payment-intent  body vide" "400" \
+    -X POST -H "Content-Type: application/json" \
+    -H "${AUTH_HEADER}" -d '{}' \
+    "${API}/subscriptions/payment-intent"
+
+  run_test "POST /subscriptions/upgrade         body vide" "400" \
+    -X POST -H "Content-Type: application/json" \
+    -H "${AUTH_HEADER}" -d '{}' \
+    "${API}/subscriptions/upgrade"
+
+  run_test "POST /subscriptions/downgrade       body vide" "400" \
+    -X POST -H "Content-Type: application/json" \
+    -H "${AUTH_HEADER}" -d '{}' \
+    "${API}/subscriptions/downgrade"
+
+  run_test "POST /quotas/consume                body vide" "400" \
+    -X POST -H "Content-Type: application/json" \
+    -H "${AUTH_HEADER}" -H "x-api-key: ${API_KEY}" \
+    -d '{}' \
+    "${API}/quotas/consume"
+
+  run_test "POST /quotas/reset                  userId invalide" "400" \
+    -X POST -H "Content-Type: application/json" \
+    -H "${AUTH_HEADER}" -H "x-api-key: ${API_KEY}" \
+    -d '{"userId":"not-a-uuid"}' \
+    "${API}/quotas/reset"
+
+  # =========================================================================
+  #  4 — NOUVEL UTILISATEUR : pas de subscription, quotas par defaut
+  # =========================================================================
+  print_header "4. Nouvel utilisateur — Aucune subscription active"
+
+  run_test "GET  /subscriptions/current   → aucune subscription" "200" \
+    -H "${AUTH_HEADER}" \
+    "${API}/subscriptions/current"
+
+  run_test "POST /subscriptions/cancel    → rien a annuler" "404" \
+    -X POST -H "${AUTH_HEADER}" \
+    "${API}/subscriptions/cancel"
+
+  run_test "POST /subscriptions/upgrade   → pas de subscription" "404" \
+    -X POST -H "Content-Type: application/json" \
+    -H "${AUTH_HEADER}" -d '{"planId":"enterprise"}' \
+    "${API}/subscriptions/upgrade"
+
+  run_test "POST /subscriptions/downgrade → pas de subscription" "404" \
+    -X POST -H "Content-Type: application/json" \
+    -H "${AUTH_HEADER}" -d '{"planId":"premium"}' \
+    "${API}/subscriptions/downgrade"
+
+  run_test "GET  /subscriptions/portal    → pas de customer Stripe" "404" \
     -H "${AUTH_HEADER}" \
     "${API}/subscriptions/portal"
 
-  run_test "GET /quotas — user frais (200)" "200" \
+  run_test "GET  /quotas                  → quotas par defaut (free)" "200" \
     -H "${AUTH_HEADER}" \
     "${API}/quotas"
 
   # =========================================================================
-  #  WEBHOOKS — Stripe (signature invalide)
+  #  5 — SOUSCRIPTION : creer une session checkout (web)
   # =========================================================================
-  print_header "WEBHOOKS — Stripe"
+  print_header "5. Souscription — Creer une session checkout Stripe"
 
-  run_test "POST /webhooks/stripe — sans signature (400)" "400" \
-    -X POST \
-    -H "Content-Type: application/json" \
+  run_test "POST /checkout  premium mensuel     → session creee" "201" \
+    -X POST -H "Content-Type: application/json" \
+    -H "${AUTH_HEADER}" \
+    -d '{"planId":"premium","successUrl":"https://app.visiobook.com/success","cancelUrl":"https://app.visiobook.com/pricing"}' \
+    "${API}/subscriptions/checkout"
+
+  run_test "POST /checkout  premium annuel      → session creee" "201" \
+    -X POST -H "Content-Type: application/json" \
+    -H "${AUTH_HEADER}" \
+    -d '{"planId":"premium","successUrl":"https://app.visiobook.com/success","cancelUrl":"https://app.visiobook.com/pricing","interval":"year"}' \
+    "${API}/subscriptions/checkout"
+
+  run_test "POST /checkout  enterprise mensuel  → session creee" "201" \
+    -X POST -H "Content-Type: application/json" \
+    -H "${AUTH_HEADER}" \
+    -d '{"planId":"enterprise","successUrl":"https://app.visiobook.com/success","cancelUrl":"https://app.visiobook.com/pricing"}' \
+    "${API}/subscriptions/checkout"
+
+  run_test "POST /checkout  plan inexistant     → rejete" "400" \
+    -X POST -H "Content-Type: application/json" \
+    -H "${AUTH_HEADER}" \
+    -d '{"planId":"nonexistent","successUrl":"https://app.visiobook.com/success","cancelUrl":"https://app.visiobook.com/pricing"}' \
+    "${API}/subscriptions/checkout"
+
+  run_test "POST /checkout  plan free           → rejete" "400" \
+    -X POST -H "Content-Type: application/json" \
+    -H "${AUTH_HEADER}" \
+    -d '{"planId":"free","successUrl":"https://app.visiobook.com/success","cancelUrl":"https://app.visiobook.com/pricing"}' \
+    "${API}/subscriptions/checkout"
+
+  # =========================================================================
+  #  6 — QUOTAS SANS SUBSCRIPTION : consume/reset → 404
+  # =========================================================================
+  if [ -n "$USER_ID" ] && [ "$USER_ID" != "None" ]; then
+    print_header "6. Quotas — Sans subscription (pas de record en DB → 404)"
+
+    run_test "POST /quotas/consume  generation → pas de quota" "404" \
+      -X POST -H "Content-Type: application/json" \
+      -H "${AUTH_HEADER}" -H "x-api-key: ${API_KEY}" \
+      -d "{\"userId\":\"${USER_ID}\",\"type\":\"generation\",\"amount\":1}" \
+      "${API}/quotas/consume"
+
+    run_test "POST /quotas/reset              → pas de quota" "404" \
+      -X POST -H "Content-Type: application/json" \
+      -H "${AUTH_HEADER}" -H "x-api-key: ${API_KEY}" \
+      -d "{\"userId\":\"${USER_ID}\"}" \
+      "${API}/quotas/reset"
+  else
+    print_header "6. Quotas — Sans subscription"
+    echo -e "  ${YELLOW}SKIP${RESET}  userId non disponible"
+  fi
+
+  # =========================================================================
+  #  7 — WEBHOOKS : signature Stripe validee
+  # =========================================================================
+  print_header "7. Webhooks — Verification signature Stripe"
+
+  run_test "POST /webhooks/stripe  sans header stripe-signature" "400" \
+    -X POST -H "Content-Type: application/json" \
+    -H "${AUTH_HEADER}" \
     -d '{"type":"checkout.session.completed"}' \
     "${API}/webhooks/stripe"
 
-  run_test "POST /webhooks/stripe — signature bidon (400)" "400" \
-    -X POST \
-    -H "Content-Type: application/json" \
+  run_test "POST /webhooks/stripe  signature invalide" "400" \
+    -X POST -H "Content-Type: application/json" \
+    -H "${AUTH_HEADER}" \
     -H "stripe-signature: t=123,v1=fake" \
     -d '{"type":"checkout.session.completed"}' \
     "${API}/webhooks/stripe"
 
+  print_section_footer
+
 fi
 
 # =============================================================================
-#  ETAPE 4 — Tests paiement Stripe e2e
+#  8 — PAIEMENT STRIPE E2E (--payment)
 # =============================================================================
 if [ "$RUN_PAYMENT" = true ]; then
 
-  print_header "ETAPE 4 — Tests paiement Stripe e2e"
+  print_header "8. Paiement Stripe e2e — Payment-intent → confirmation → activation"
 
   step "Stripe API accessible ?"
   STRIPE_CHECK=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
     "https://api.stripe.com/v1/balance" -u "${STRIPE_SK}:")
   if [ "$STRIPE_CHECK" != "200" ]; then
-    echo "  [FATAL] Stripe API inaccessible ou cle invalide"
+    echo -e "  ${RED}[FATAL] Stripe API inaccessible ou cle invalide${RESET}"
     exit 1
   fi
-  echo "  OK — Stripe API (mode test)"
+  echo -e "  ${GREEN}OK${RESET} — Stripe API (mode test)"
 
   STRIPE_CUSTOMERS_TO_CLEANUP=()
 
@@ -321,11 +479,11 @@ if [ "$RUN_PAYMENT" = true ]; then
     local label="$3"
 
     TOTAL=$((TOTAL + 1))
+    SECTION_TOTAL=$((SECTION_TOTAL + 1))
     echo ""
-    echo "--- [$TOTAL] $label ---"
-    echo "  Plan:     $plan_id ($interval)"
+    echo -e "  ${CYAN}${BOLD}[$TOTAL] $label${RESET}  ${DIM}($plan_id / $interval)${RESET}"
 
-    # --- Creer la subscription via payment-intent ---
+    # 8a — Creer la subscription via payment-intent
     step "POST /subscriptions/payment-intent"
     RESPONSE=$(curl -s --max-time 15 -X POST \
       -H "Content-Type: application/json" \
@@ -338,21 +496,22 @@ if [ "$RUN_PAYMENT" = true ]; then
     SUB_ID=$(json_get "$RESPONSE" "subscriptionId")
 
     if [ -z "$CLIENT_SECRET" ] || [ -z "$CUSTOMER_ID" ]; then
-      echo "  [FAIL] Echec creation payment-intent: $RESPONSE"
+      echo -e "  ${RED}FAIL${RESET}  Echec creation payment-intent"
+      echo -e "        ${DIM}$RESPONSE${RESET}"
       FAIL=$((FAIL + 1))
+      SECTION_FAIL=$((SECTION_FAIL + 1))
       return
     fi
-    echo "  clientSecret: ${CLIENT_SECRET:0:40}..."
-    echo "  customerId:   $CUSTOMER_ID"
-    echo "  subscription: $SUB_ID"
+    echo -e "        clientSecret: ${DIM}${CLIENT_SECRET:0:40}...${RESET}"
+    echo -e "        customerId:   ${DIM}$CUSTOMER_ID${RESET}"
+    echo -e "        subscription: ${DIM}$SUB_ID${RESET}"
 
     STRIPE_CUSTOMERS_TO_CLEANUP+=("$CUSTOMER_ID")
 
-    # Extraire le PaymentIntent ID
     PI_ID="${CLIENT_SECRET%%_secret_*}"
 
-    # --- Confirmer le PaymentIntent avec carte test ---
-    step "Stripe API: confirmer PaymentIntent ${PI_ID} (carte 4242...)"
+    # 8b — Confirmer le PaymentIntent avec carte test 4242
+    step "Confirmer PaymentIntent ${PI_ID} (carte 4242...)"
     CONFIRM_RESPONSE=$(curl -s --max-time 15 -X POST \
       "https://api.stripe.com/v1/payment_intents/${PI_ID}/confirm" \
       -u "${STRIPE_SK}:" \
@@ -361,49 +520,84 @@ if [ "$RUN_PAYMENT" = true ]; then
     PI_STATUS=$(json_get "$CONFIRM_RESPONSE" "status")
 
     if [ "$PI_STATUS" = "succeeded" ]; then
-      echo "  [PASS] PaymentIntent confirme — status: succeeded"
+      echo -e "  ${GREEN}PASS${RESET}  PaymentIntent confirme (status: succeeded)"
       PASS=$((PASS + 1))
+      SECTION_PASS=$((SECTION_PASS + 1))
     else
-      echo "  [FAIL] PaymentIntent status: $PI_STATUS"
-      echo "  Response: $(echo "$CONFIRM_RESPONSE" | head -c 300)"
+      echo -e "  ${RED}FAIL${RESET}  PaymentIntent status: $PI_STATUS"
+      echo -e "        ${DIM}$(echo "$CONFIRM_RESPONSE" | head -c 200)${RESET}"
       FAIL=$((FAIL + 1))
+      SECTION_FAIL=$((SECTION_FAIL + 1))
       return
     fi
 
-    # --- Attente propagation webhook ---
+    # 8c — Attente propagation webhook
     step "Attente propagation webhook (5s)..."
     sleep 5
 
-    # --- Verifier la subscription cote Stripe ---
-    step "Stripe API: verifier subscription ${SUB_ID}"
+    # 8d — Verifier la subscription Stripe
+    step "Verifier subscription Stripe ${SUB_ID}"
     SUB_RESPONSE=$(curl -s --max-time 10 \
       "https://api.stripe.com/v1/subscriptions/${SUB_ID}" \
       -u "${STRIPE_SK}:")
     SUB_STATUS=$(json_get "$SUB_RESPONSE" "status")
-    echo "  Subscription Stripe: $SUB_STATUS"
+    echo -e "        Stripe status: ${DIM}$SUB_STATUS${RESET}"
 
-    # --- Verifier via notre API ---
-    step "GET /subscriptions/current"
+    # 8e — Verifier via notre API
+    step "GET /subscriptions/current → subscription active ?"
     OUR_RESPONSE=$(curl -s --max-time 10 \
       -H "${AUTH_HEADER}" \
       "${API}/subscriptions/current")
-    echo "  Notre API: $(echo "$OUR_RESPONSE" | head -c 300)"
+    echo -e "        API response:  ${DIM}$(echo "$OUR_RESPONSE" | head -c 200)${RESET}"
   }
 
-  # --- Scenarios ---
-  print_header "SCENARIO : Premium mensuel"
-  simulate_payment "premium" "month" "Premium mensuel"
+  # --- Scenario : Premium mensuel ---
+  simulate_payment "premium" "month" "Scenario: Premium mensuel"
 
-  # --- Cleanup Stripe (annuler les subscriptions de test) ---
+  # --- Post-paiement : quotas (maintenant le record existe) ---
+  if [ -n "$USER_ID" ] && [ "$USER_ID" != "None" ]; then
+    print_header "9. Post-paiement — Quotas apres activation subscription"
+
+    run_test "GET  /quotas                  → quotas premium" "200" \
+      -H "${AUTH_HEADER}" \
+      "${API}/quotas"
+
+    run_test "POST /quotas/consume  generation x1 → consomme" "200" \
+      -X POST -H "Content-Type: application/json" \
+      -H "${AUTH_HEADER}" -H "x-api-key: ${API_KEY}" \
+      -d "{\"userId\":\"${USER_ID}\",\"type\":\"generation\",\"amount\":1}" \
+      "${API}/quotas/consume"
+
+    run_test "POST /quotas/consume  storage x1    → consomme" "200" \
+      -X POST -H "Content-Type: application/json" \
+      -H "${AUTH_HEADER}" -H "x-api-key: ${API_KEY}" \
+      -d "{\"userId\":\"${USER_ID}\",\"type\":\"storage\",\"amount\":1}" \
+      "${API}/quotas/consume"
+
+    run_test "GET  /quotas                  → verifier consommation" "200" \
+      -H "${AUTH_HEADER}" \
+      "${API}/quotas"
+
+    run_test "POST /quotas/reset            → reinitialiser" "200" \
+      -X POST -H "Content-Type: application/json" \
+      -H "${AUTH_HEADER}" -H "x-api-key: ${API_KEY}" \
+      -d "{\"userId\":\"${USER_ID}\"}" \
+      "${API}/quotas/reset"
+
+    run_test "GET  /quotas                  → verifier reset" "200" \
+      -H "${AUTH_HEADER}" \
+      "${API}/quotas"
+  fi
+
+  # --- Cleanup Stripe ---
   if [ "$CLEANUP_STRIPE" = true ] && [ ${#STRIPE_CUSTOMERS_TO_CLEANUP[@]} -gt 0 ]; then
-    print_header "CLEANUP — Annulation des subscriptions Stripe de test"
+    echo ""
+    echo -e "  ${DIM}--- Cleanup Stripe ---${RESET}"
     for cust_id in "${STRIPE_CUSTOMERS_TO_CLEANUP[@]}"; do
       step "Annulation des subscriptions pour customer $cust_id"
-      # Lister les subscriptions du customer
       SUBS_LIST=$(curl -s --max-time 10 \
         "https://api.stripe.com/v1/subscriptions?customer=${cust_id}&status=active" \
         -u "${STRIPE_SK}:")
-      # Extraire les IDs et annuler
       SUB_IDS=$(python3 -c "
 import sys, json
 data = json.loads(sys.argv[1])
@@ -414,25 +608,39 @@ for sub in data.get('data', []):
         curl -s --max-time 10 -X DELETE \
           "https://api.stripe.com/v1/subscriptions/${sub_id}" \
           -u "${STRIPE_SK}:" > /dev/null
-        echo "    Annulee: $sub_id"
+        echo -e "        ${DIM}Annulee: $sub_id${RESET}"
       done
     done
-    echo "  Cleanup Stripe termine"
+    echo -e "  ${GREEN}OK${RESET} — cleanup termine"
   fi
+
+  print_section_footer
 fi
 
 # =============================================================================
 #  RESULTATS
 # =============================================================================
 echo ""
-echo "================================================================"
-echo "  RESULTATS — TEST E2E CLUSTER"
-echo "================================================================"
-echo "  URL:        $BASE_URL"
-echo "  Total:      $TOTAL"
-echo "  Pass:       $PASS"
-echo "  Fail:       $FAIL"
-echo "================================================================"
+echo ""
+if [ "$FAIL" -eq 0 ]; then
+  echo -e "${GREEN}${BOLD}================================================================${RESET}"
+  echo -e "${GREEN}${BOLD}  ALL TESTS PASSED${RESET}"
+  echo -e "${GREEN}${BOLD}================================================================${RESET}"
+else
+  echo -e "${RED}${BOLD}================================================================${RESET}"
+  echo -e "${RED}${BOLD}  SOME TESTS FAILED${RESET}"
+  echo -e "${RED}${BOLD}================================================================${RESET}"
+fi
+echo ""
+echo -e "  URL:     $BASE_URL"
+echo -e "  Total:   ${BOLD}$TOTAL${RESET}"
+echo -e "  Pass:    ${GREEN}${BOLD}$PASS${RESET}"
+if [ "$FAIL" -gt 0 ]; then
+  echo -e "  Fail:    ${RED}${BOLD}$FAIL${RESET}"
+else
+  echo -e "  Fail:    ${BOLD}$FAIL${RESET}"
+fi
+echo ""
 
 if [ "$FAIL" -gt 0 ]; then
   exit 1

@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { join } from 'path';
 import { DataSource } from 'typeorm';
 import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
 import { SubscriptionEntity } from '../entities/subscription.entity';
@@ -9,6 +10,6 @@ export default new DataSource({
   type: 'postgres',
   url: process.env.DATABASE_URL,
   entities: [SubscriptionEntity, QuotaEntity, TransactionEntity],
-  migrations: ['src/migrations/*.ts'],
+  migrations: [join(__dirname, '..', 'migrations', '*{.ts,.js}')],
   namingStrategy: new SnakeNamingStrategy(),
 });
