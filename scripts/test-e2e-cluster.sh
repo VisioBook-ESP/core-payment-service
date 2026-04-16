@@ -294,7 +294,7 @@ if [ "$RUN_CURL" = true ]; then
     -d '{"userId":"00000000-0000-0000-0000-000000000000"}' \
     "${API}/quotas/reset"
 
-  run_test "POST /webhooks/stripe" "403" \
+  run_test "POST /webhooks/stripe  (pas de RBAC, securise par signature Stripe → 400)" "400" \
     -X POST -H "Content-Type: application/json" \
     -d '{"type":"checkout.session.completed"}' \
     "${API}/webhooks/stripe"
@@ -562,13 +562,13 @@ if [ "$RUN_PAYMENT" = true ]; then
       -H "${AUTH_HEADER}" \
       "${API}/quotas"
 
-    run_test "POST /quotas/consume  generation x1 → consomme" "200" \
+    run_test "POST /quotas/consume  generation x1 → consomme" "201" \
       -X POST -H "Content-Type: application/json" \
       -H "${AUTH_HEADER}" -H "x-api-key: ${API_KEY}" \
       -d "{\"userId\":\"${USER_ID}\",\"type\":\"generation\",\"amount\":1}" \
       "${API}/quotas/consume"
 
-    run_test "POST /quotas/consume  storage x1    → consomme" "200" \
+    run_test "POST /quotas/consume  storage x1    → consomme" "201" \
       -X POST -H "Content-Type: application/json" \
       -H "${AUTH_HEADER}" -H "x-api-key: ${API_KEY}" \
       -d "{\"userId\":\"${USER_ID}\",\"type\":\"storage\",\"amount\":1}" \
@@ -578,7 +578,7 @@ if [ "$RUN_PAYMENT" = true ]; then
       -H "${AUTH_HEADER}" \
       "${API}/quotas"
 
-    run_test "POST /quotas/reset            → reinitialiser" "200" \
+    run_test "POST /quotas/reset            → reinitialiser" "201" \
       -X POST -H "Content-Type: application/json" \
       -H "${AUTH_HEADER}" -H "x-api-key: ${API_KEY}" \
       -d "{\"userId\":\"${USER_ID}\"}" \
