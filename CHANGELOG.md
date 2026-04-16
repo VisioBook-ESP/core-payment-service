@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-04-16
+
+### Fixed
+- **`src/config/data-source.ts`** : le chemin des migrations etait en dur `src/migrations/*.ts` — ne fonctionnait pas dans l'image Docker de production (seul `dist/` existe). Remplace par `join(__dirname, '..', 'migrations', '*{.ts,.js}')` qui resout correctement en local (`src/`) et en production (`dist/`). **C'est la cause des tables `subscriptions`, `quotas`, `transactions` manquantes en cluster** — l'init container terminait avec exitCode 0 sans executer aucune migration.
+
+### Changed
+- **`scripts/test-e2e-cluster.sh`** : reecriture complete — tests organises en parcours utilisateur (securite → decouverte → validation → souscription → paiement → quotas → webhooks)
+  - Suppression des health checks (non pertinents pour le test du service de paiement)
+  - Prise en compte du RBAC Gateway Kong : toutes les routes necessitent un Bearer token pour traverser la Gateway
+  - 9 sections numerotees suivant le parcours utilisateur du service de paiement
+  - Couleurs (PASS vert, FAIL rouge, SKIP jaune) + compteurs par section
+  - Section 1 : securite — 12 endpoints testes sans token (→ 403)
+  - Section 3 : validation — body vide/invalide pour 6 endpoints (→ 400)
+  - Section 5 : checkout Stripe — premium mensuel/annuel, enterprise (→ 201) + plans invalide/free (→ 400)
+  - Section 6 : quotas sans subscription — consume/reset → 404 (pas de record en DB, comportement attendu)
+  - Section 8–9 (`--payment`) : paiement e2e complet + quotas apres activation subscription
+  - Extraction automatique du userId depuis le JWT
+  - Resume final avec banniere ALL TESTS PASSED / SOME TESTS FAILED
+- **README.md** : section « Tests e2e cluster » mise a jour avec tableau du parcours utilisateur
+
 ## [0.6.0] - 2026-04-03
 
 ### Changed
