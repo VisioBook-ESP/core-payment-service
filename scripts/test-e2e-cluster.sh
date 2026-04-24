@@ -6,11 +6,12 @@
 #   1. Securite    — Toutes les routes bloquees sans token (Gateway RBAC)
 #   2. Decouverte  — Consulter les plans disponibles
 #   3. Validation  — Donnees invalides rejetees (body vide, mauvais format)
-#   4. Nouvel utilisateur — Pas de subscription, quotas par defaut
+#   4. Nouvel utilisateur — Pas de subscription, quotas par defaut, balance tokens Free
 #   5. Souscription — Checkout web (session Stripe) + erreurs metier
-#   6. Paiement    — (--payment) Payment-intent mobile, confirmation, activation
-#   7. Post-paiement — (--payment) Quotas consommes/reset apres subscription
-#   8. Webhooks    — Signature Stripe validee
+#   6. Tokens sans sub — GET balance Free virtuel OK, POST consume 404 (pas de row)
+#   7. Webhooks    — Signature Stripe validee
+#   8. Paiement    — (--payment) Payment-intent mobile, confirmation, activation
+#   9. Post-paiement — (--payment) Quotas + Tokens consommes apres subscription
 #
 # Usage:
 #   ./scripts/test-e2e-cluster.sh                    # hit visiobook.cloud
@@ -294,6 +295,14 @@ if [ "$RUN_CURL" = true ]; then
     -d '{"userId":"00000000-0000-0000-0000-000000000000"}' \
     "${API}/quotas/reset"
 
+  run_test "GET  /tokens" "403" \
+    "${API}/tokens"
+
+  run_test "POST /tokens/consume" "403" \
+    -X POST -H "Content-Type: application/json" \
+    -d '{"userId":"00000000-0000-0000-0000-000000000000","amount":1}' \
+    "${API}/tokens/consume"
+
   run_test "POST /webhooks/stripe  (pas de RBAC, securise par signature Stripe → 400)" "400" \
     -X POST -H "Content-Type: application/json" \
     -d '{"type":"checkout.session.completed"}' \
@@ -345,6 +354,18 @@ if [ "$RUN_CURL" = true ]; then
     -d '{"userId":"not-a-uuid"}' \
     "${API}/quotas/reset"
 
+  run_test "POST /tokens/consume                 body vide" "400" \
+    -X POST -H "Content-Type: application/json" \
+    -H "${AUTH_HEADER}" -H "x-api-key: ${API_KEY}" \
+    -d '{}' \
+    "${API}/tokens/consume"
+
+  run_test "POST /tokens/consume                 amount = 0" "400" \
+    -X POST -H "Content-Type: application/json" \
+    -H "${AUTH_HEADER}" -H "x-api-key: ${API_KEY}" \
+    -d "{\"userId\":\"${USER_ID:-00000000-0000-4000-a000-000000000001}\",\"amount\":0}" \
+    "${API}/tokens/consume"
+
   # =========================================================================
   #  4 — NOUVEL UTILISATEUR : pas de subscription, quotas par defaut
   # =========================================================================
@@ -375,6 +396,10 @@ if [ "$RUN_CURL" = true ]; then
   run_test "GET  /quotas                  → quotas par defaut (free)" "200" \
     -H "${AUTH_HEADER}" \
     "${API}/quotas"
+
+  run_test "GET  /tokens                  → balance Free virtuel (PLAN_FREE_TOKENS)" "200" \
+    -H "${AUTH_HEADER}" \
+    "${API}/tokens"
 
   # =========================================================================
   #  5 — SOUSCRIPTION : creer une session checkout (web)
@@ -428,6 +453,12 @@ if [ "$RUN_CURL" = true ]; then
       -H "${AUTH_HEADER}" -H "x-api-key: ${API_KEY}" \
       -d "{\"userId\":\"${USER_ID}\"}" \
       "${API}/quotas/reset"
+
+    run_test "POST /tokens/consume  sans row  → 404" "404" \
+      -X POST -H "Content-Type: application/json" \
+      -H "${AUTH_HEADER}" -H "x-api-key: ${API_KEY}" \
+      -d "{\"userId\":\"${USER_ID}\",\"amount\":1}" \
+      "${API}/tokens/consume"
   else
     print_header "6. Quotas — Sans subscription"
     echo -e "  ${YELLOW}SKIP${RESET}  userId non disponible"
@@ -587,6 +618,33 @@ if [ "$RUN_PAYMENT" = true ]; then
     run_test "GET  /quotas                  → verifier reset" "200" \
       -H "${AUTH_HEADER}" \
       "${API}/quotas"
+
+    # --- Tokens post-paiement : balance Premium + consume multi-IA + overshoot ---
+    run_test "GET  /tokens                  → balance Premium" "200" \
+      -H "${AUTH_HEADER}" \
+      "${API}/tokens"
+
+    run_test "POST /tokens/consume  80 (elevenlabs-tts)" "201" \
+      -X POST -H "Content-Type: application/json" \
+      -H "${AUTH_HEADER}" -H "x-api-key: ${API_KEY}" \
+      -d "{\"userId\":\"${USER_ID}\",\"amount\":80,\"source\":\"elevenlabs-tts\"}" \
+      "${API}/tokens/consume"
+
+    run_test "POST /tokens/consume  50 (openai-gpt)" "201" \
+      -X POST -H "Content-Type: application/json" \
+      -H "${AUTH_HEADER}" -H "x-api-key: ${API_KEY}" \
+      -d "{\"userId\":\"${USER_ID}\",\"amount\":50,\"source\":\"openai-gpt\"}" \
+      "${API}/tokens/consume"
+
+    run_test "GET  /tokens                  → verifier cumul" "200" \
+      -H "${AUTH_HEADER}" \
+      "${API}/tokens"
+
+    run_test "POST /tokens/consume  overshoot → INSUFFICIENT_TOKENS (HTTP 201)" "201" \
+      -X POST -H "Content-Type: application/json" \
+      -H "${AUTH_HEADER}" -H "x-api-key: ${API_KEY}" \
+      -d "{\"userId\":\"${USER_ID}\",\"amount\":999999999}" \
+      "${API}/tokens/consume"
   fi
 
   # --- Cleanup Stripe ---

@@ -2,11 +2,12 @@
 # =============================================================================
 # test-e2e.sh — Lance tout l'environnement de test e2e en une commande
 #
-# Usage: ./scripts/test-e2e.sh [--payment] [--curl] [--db]
+# Usage: ./scripts/test-e2e.sh [--payment] [--curl] [--tokens] [--db]
 #   --payment  Lance les tests de paiement e2e (default si aucun flag)
 #   --curl     Lance les tests curl fonctionnels
+#   --tokens   Lance curl-tokens-e2e.sh (GET/POST /tokens + consume + overshoot)
 #   --db       Affiche l'etat de la DB apres les tests
-#   --all      Lance curl + payment + db
+#   --all      Lance curl + tokens + payment + db
 #
 # Prerequis: docker, stripe CLI (stripe login fait sur le bon compte)
 # =============================================================================

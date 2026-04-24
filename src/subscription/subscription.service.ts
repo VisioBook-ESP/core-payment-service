@@ -1,8 +1,10 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { StripeAdapter } from '../adapters/stripe.adapter';
 import { PLANS, getPlanById, PlanConfig } from '../config/plans.config';
 import { SubscriptionEntity } from '../entities/subscription.entity';
 import { DatabaseClient } from '../services/database.client';
+import { getTokensForPlan } from '../tokens/tokens.controller';
 import {
   SubscriptionNotFoundException,
   InvalidPlanException,
@@ -18,6 +20,7 @@ export class SubscriptionService {
   constructor(
     private readonly stripeAdapter: StripeAdapter,
     private readonly databaseClient: DatabaseClient,
+    private readonly config: ConfigService,
   ) {}
 
   getPlans(): PlanConfig[] {
@@ -110,6 +113,7 @@ export class SubscriptionService {
         planId,
         generationsLimit: plan.limits.generationsPerMonth,
         storageLimit: plan.limits.storageGB * 1024 * 1024 * 1024,
+        tokensLimit: getTokensForPlan(this.config, planId),
       });
     }
 
@@ -152,6 +156,7 @@ export class SubscriptionService {
         planId: newPlanId,
         generationsLimit: plan.limits.generationsPerMonth,
         storageLimit: plan.limits.storageGB * 1024 * 1024 * 1024,
+        tokensLimit: getTokensForPlan(this.config, newPlanId),
       });
     }
 

@@ -29,6 +29,12 @@ export class QuotaEntity {
   @Column({ type: 'bigint' })
   storageLimit!: number;
 
+  @Column({ type: 'bigint', default: 0 })
+  tokensUsed!: string | number;
+
+  @Column({ type: 'bigint', default: 0 })
+  tokensLimit!: string | number;
+
   @Column({ type: 'timestamptz' })
   resetDate!: string;
 

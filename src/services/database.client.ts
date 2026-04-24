@@ -77,19 +77,28 @@ export class DatabaseClient {
     planId: string;
     generationsLimit: number;
     storageLimit: number;
+    tokensLimit?: number;
   }): Promise<QuotaEntity> {
     const existing = await this.quotaRepo.findOne({ where: { userId: params.userId } });
     if (existing) {
       existing.planId = params.planId;
       existing.generationsLimit = params.generationsLimit;
       existing.storageLimit = params.storageLimit;
+      if (params.tokensLimit !== undefined) {
+        existing.tokensLimit = params.tokensLimit;
+      }
       return this.quotaRepo.save(existing);
     }
     return this.quotaRepo.save(
       this.quotaRepo.create({
-        ...params,
+        userId: params.userId,
+        planId: params.planId,
+        generationsLimit: params.generationsLimit,
+        storageLimit: params.storageLimit,
         generationsUsed: 0,
         storageUsed: 0,
+        tokensUsed: 0,
+        tokensLimit: params.tokensLimit ?? 0,
         resetDate: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toISOString(),
       }),
     );

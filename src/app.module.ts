@@ -7,6 +7,7 @@ import { typeOrmConfig } from './config/typeorm.config';
 import { HealthModule } from './health/health.module';
 import { SubscriptionModule } from './subscription/subscription.module';
 import { QuotaModule } from './quota/quota.module';
+import { TokensModule } from './tokens/tokens.module';
 import { WebhookModule } from './webhook/webhook.module';
 
 @Module({
@@ -30,6 +31,7 @@ import { WebhookModule } from './webhook/webhook.module';
     HealthModule,
     SubscriptionModule,
     QuotaModule,
+    TokensModule,
     WebhookModule,
   ],
 })

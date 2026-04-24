@@ -18,6 +18,9 @@ services:
       - INTERNAL_API_KEY=${INTERNAL_API_KEY:-dev-internal-key}
       - USER_SERVICE_MOCK=${USER_SERVICE_MOCK:-false}
       - LOG_LEVEL=debug
+      - PLAN_FREE_TOKENS=${PLAN_FREE_TOKENS:-10000}
+      - PLAN_PREMIUM_TOKENS=${PLAN_PREMIUM_TOKENS:-500000}
+      - PLAN_ENTERPRISE_TOKENS=${PLAN_ENTERPRISE_TOKENS:-100000000}
     volumes:
       - ./src:/app/src
       - ./tests:/app/tests

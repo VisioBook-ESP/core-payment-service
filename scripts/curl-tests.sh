@@ -58,8 +58,8 @@ INSERT INTO subscriptions (user_id, stripe_customer_id, stripe_subscription_id, 
 VALUES ('550e8400-e29b-41d4-a716-446655440000', 'cus_test123', 'sub_test123', 'premium', 'active', now(), now() + interval '30 days')
 ON CONFLICT (user_id) DO NOTHING;
 
-INSERT INTO quotas (user_id, plan_id, generations_used, generations_limit, storage_used, storage_limit, reset_date)
-VALUES ('550e8400-e29b-41d4-a716-446655440000', 'premium', 5, 50, 0, 10737418240, now() + interval '30 days')
+INSERT INTO quotas (user_id, plan_id, generations_used, generations_limit, storage_used, storage_limit, tokens_used, tokens_limit, reset_date)
+VALUES ('550e8400-e29b-41d4-a716-446655440000', 'premium', 5, 50, 0, 10737418240, 0, 500000, now() + interval '30 days')
 ON CONFLICT (user_id) DO NOTHING;
 
 INSERT INTO transactions (user_id, stripe_payment_intent_id, amount, currency, status)
@@ -83,7 +83,7 @@ show_db() {
   echo "  --- Etat de la base ---"
   docker compose exec -T postgres psql -U payment_app -d payment -c \
     "SELECT user_id, plan_id, status FROM subscriptions WHERE user_id = '${USER_ID}';
-     SELECT user_id, plan_id, generations_used, generations_limit, storage_used, storage_limit FROM quotas WHERE user_id = '${USER_ID}';
+     SELECT user_id, plan_id, generations_used, generations_limit, storage_used, storage_limit, tokens_used, tokens_limit FROM quotas WHERE user_id = '${USER_ID}';
      SELECT user_id, amount, currency, status FROM transactions WHERE user_id = '${USER_ID}';" 2>/dev/null
 }
 
@@ -137,6 +137,15 @@ run_test "POST /quotas/reset — sans api-key (401)" "401" \
   -d "{\"userId\":\"${USER_ID}\"}" \
   "${API}/quotas/reset"
 
+run_test "GET /tokens — sans header (401)" "401" \
+  "${API}/tokens"
+
+run_test "POST /tokens/consume — sans api-key (401)" "401" \
+  -X POST \
+  -H "Content-Type: application/json" \
+  -d "{\"userId\":\"${USER_ID}\",\"amount\":1}" \
+  "${API}/tokens/consume"
+
 # --- Validation errors ---
 print_header "VALIDATION — Body invalide"
 
@@ -153,6 +162,13 @@ run_test "POST /quotas/consume — body vide (400)" "400" \
   -H "x-api-key: ${API_KEY}" \
   -d '{}' \
   "${API}/quotas/consume"
+
+run_test "POST /tokens/consume — body vide (400)" "400" \
+  -X POST \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: ${API_KEY}" \
+  -d '{}' \
+  "${API}/tokens/consume"
 
 # --- Sans donnees: 404 / empty ---
 print_header "SANS DONNEES — Comportement attendu"
@@ -226,6 +242,17 @@ run_test "POST /quotas/reset — pas de quota (404)" "404" \
   -H "x-api-key: ${API_KEY}" \
   -d "{\"userId\":\"${USER_ID}\"}" \
   "${API}/quotas/reset"
+
+run_test "GET /tokens — user inconnu → balance Free virtuel (200)" "200" \
+  -H "x-user-id: ${USER_ID}" \
+  "${API}/tokens"
+
+run_test "POST /tokens/consume — pas de row quota (404)" "404" \
+  -X POST \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: ${API_KEY}" \
+  -d "{\"userId\":\"${USER_ID}\",\"amount\":1}" \
+  "${API}/tokens/consume"
 
 # --- Webhooks ---
 print_header "WEBHOOKS — Stripe"
@@ -302,6 +329,38 @@ run_test "POST /quotas/reset (201)" "201" \
   -H "x-api-key: ${API_KEY}" \
   -d "{\"userId\":\"${USER_ID}\"}" \
   "${API}/quotas/reset"
+
+# --- Tokens consume ---
+print_header "AVEC DONNEES — Consume tokens (Premium seed: tokens_limit=500000)"
+
+run_test "GET /tokens — user Premium (200)" "200" \
+  -H "x-user-id: ${USER_ID}" \
+  "${API}/tokens"
+
+run_test "POST /tokens/consume — 80 tokens (elevenlabs-tts) (201)" "201" \
+  -X POST \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: ${API_KEY}" \
+  -d "{\"userId\":\"${USER_ID}\",\"amount\":80,\"source\":\"elevenlabs-tts\"}" \
+  "${API}/tokens/consume"
+
+run_test "POST /tokens/consume — 50 tokens (openai-gpt) (201)" "201" \
+  -X POST \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: ${API_KEY}" \
+  -d "{\"userId\":\"${USER_ID}\",\"amount\":50,\"source\":\"openai-gpt\"}" \
+  "${API}/tokens/consume"
+
+run_test "GET /tokens — verifier cumul (200)" "200" \
+  -H "x-user-id: ${USER_ID}" \
+  "${API}/tokens"
+
+run_test "POST /tokens/consume — overshoot (201 success=false)" "201" \
+  -X POST \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: ${API_KEY}" \
+  -d "{\"userId\":\"${USER_ID}\",\"amount\":999999999}" \
+  "${API}/tokens/consume"
 
 # --- Etat final ---
 print_header "ETAT FINAL DE LA BASE"
